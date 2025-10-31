@@ -17,6 +17,7 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table'
 import { PostConfirmationDialog } from './post-confirmation-dialog'
+import { PostActivityDialog } from './post-activity-dialog'
 import { postMonthToQuickBooks } from '@/app/(dashboard)/[organizationId]/actions'
 import { useRouter } from 'next/navigation'
 import {
@@ -73,6 +74,13 @@ export function WaterfallTable({
   const [accountingConnected, setAccountingConnected] = useState(false)
   const [hasAccountMapping, setHasAccountMapping] = useState(false)
   const [platform, setPlatform] = useState<string | null>(null)
+  const [viewingPostActivity, setViewingPostActivity] = useState<{
+    month: string
+    amount: number
+    journal_entry_id: string | null
+    posted_by: string | null
+    posted_at: string | null
+  } | null>(null)
 
   // Check accounting connection and account mapping from localStorage (mock)
   useEffect(() => {
@@ -257,6 +265,24 @@ export function WaterfallTable({
     return schedules.filter((s) => s.recognition_month === month).length
   }
 
+  // Handle viewing posted activity
+  const handleViewPostedActivity = (month: string) => {
+    const monthSchedules = schedules.filter((s) => s.recognition_month === month && s.posted)
+    if (monthSchedules.length === 0) return
+
+    // Get the first posted schedule for metadata (they should all have same post data)
+    const firstSchedule = monthSchedules[0]
+    const totalAmount = monthSchedules.reduce((sum, s) => sum + s.recognition_amount, 0)
+
+    setViewingPostActivity({
+      month,
+      amount: totalAmount,
+      journal_entry_id: firstSchedule.journal_entry_id,
+      posted_by: firstSchedule.posted_by,
+      posted_at: firstSchedule.posted_at,
+    })
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -355,10 +381,13 @@ export function WaterfallTable({
                       className="whitespace-nowrap px-4 py-3 text-right"
                     >
                       {isPosted ? (
-                        <div className="flex items-center justify-end gap-1.5 text-xs text-green-600">
+                        <button
+                          onClick={() => handleViewPostedActivity(month)}
+                          className="flex items-center justify-end gap-1.5 text-xs text-green-600 hover:text-green-700 hover:underline cursor-pointer transition-colors"
+                        >
                           <Check className="h-3.5 w-3.5" />
                           <span>Posted</span>
-                        </div>
+                        </button>
                       ) : effectiveCanPost ? (
                         <Button
                           onClick={() => handlePostClick(month)}
@@ -446,6 +475,14 @@ export function WaterfallTable({
           isProcessing={isProcessing}
         />
       )}
+
+      {/* Post activity dialog */}
+      <PostActivityDialog
+        isOpen={!!viewingPostActivity}
+        onClose={() => setViewingPostActivity(null)}
+        activity={viewingPostActivity}
+        platformName={platformDisplayName}
+      />
     </div>
   )
 }
