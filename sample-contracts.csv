@@ -1,0 +1,6 @@
+invoice_id,customer_name,amount,start_date,end_date,term_months,description
+INV-001,Acme Corporation,12000.00,2025-01-01,2025-12-31,,Annual software subscription
+INV-002,Beta Industries,24000.00,2025-01-01,,,24,Two-year enterprise license
+INV-003,Charlie Co,6000.00,2025-02-01,2025-07-31,,Q1-Q2 consulting services
+INV-004,Delta Systems,36000.00,2025-01-15,,,36,Three-year maintenance contract
+INV-005,Echo Partners,9000.00,2025-03-01,2025-11-30,,9-month project

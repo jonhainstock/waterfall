@@ -31,7 +31,7 @@ export function OrganizationSwitcher({
 
   function handleOrgChange(orgId: string) {
     setIsOpen(false)
-    router.push(`/${orgId}/dashboard`)
+    router.push(`/${orgId}`)
   }
 
   return (

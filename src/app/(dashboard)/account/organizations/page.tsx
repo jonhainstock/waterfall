@@ -105,7 +105,7 @@ export default async function OrganizationsPage() {
               {organizations.map((org: any) => (
                 <Link
                   key={org.id}
-                  href={`/${org.id}/dashboard`}
+                  href={`/${org.id}`}
                   className="group relative rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="flex items-start justify-between">

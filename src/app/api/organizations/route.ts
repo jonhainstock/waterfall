@@ -96,19 +96,21 @@ export async function POST(request: Request) {
     }
 
     // Check user has permission (owner or admin role)
-    const { data: membership, error: membershipError } = await supabase
+    const membershipResult: any = await supabase
       .from('account_users')
       .select('role')
       .eq('account_id', accountId)
       .eq('user_id', user.id)
       .single()
 
-    if (membershipError || !membership) {
+    if (membershipResult.error || !membershipResult.data) {
       return NextResponse.json(
         { error: 'Not a member of this account' },
         { status: 403 }
       )
     }
+
+    const membership = membershipResult.data
 
     if (membership.role !== 'owner' && membership.role !== 'admin') {
       return NextResponse.json(
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
         account_id: accountId,
         name,
         is_active: true,
-      })
+      } as any)
       .select()
       .single()
 

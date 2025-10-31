@@ -25,6 +25,7 @@ All technical patterns are in **Skills** (auto-activate based on context):
 - **waterfall-auth** - Authentication, permissions, roles, team management
 - **waterfall-business-logic** - Revenue recognition, CSV import, QuickBooks
 - **waterfall-ui-patterns** - React components, forms, tables, shadcn/ui
+- **waterfall-testing** - Vitest patterns, unit tests, mocking strategies
 - **skill-developer** - Create/update skills as project evolves
 
 **Skills auto-activate** when you work on related files or mention keywords. Reference them explicitly when needed.
@@ -96,6 +97,22 @@ pnpm start
 ```bash
 # Generate TypeScript types from Supabase
 npx supabase gen types typescript --project-id PROJECT_ID > types/supabase.ts
+```
+
+### Testing
+
+```bash
+# Run tests in watch mode
+pnpm test
+
+# Run tests once (CI mode)
+pnpm test:run
+
+# Run tests with UI
+pnpm test:ui
+
+# Run tests with coverage report
+pnpm test:coverage
 ```
 
 ### Next.js MCP (Model Context Protocol)
@@ -280,11 +297,77 @@ NEXTAUTH_SECRET="random-secret-here"
 
 ## Testing Patterns
 
-### Test Authenticated Routes
+**Test Framework:** Vitest
 
+**Philosophy:** We don't aim for 100% coverage, but we DO test critical business logic to prevent regressions.
+
+### What to Test
+
+**Priority 1 - Critical Business Logic:**
+- Revenue recognition calculations (financial accuracy)
+- Permission/role logic (security)
+- CSV import validation (data integrity)
+- Contract date calculations (business rules)
+
+**Priority 2 - Utility Functions:**
+- Date formatting helpers
+- Currency formatting
+- QuickBooks API helpers (mocked)
+- Data transformations
+
+**Priority 3 - Integration Tests:**
+- API route handlers (with mocked auth)
+- Server Actions (with mocked Supabase)
+
+**Skip:**
+- React components (for now)
+- UI interactions
+- Supabase queries (covered by integration tests)
+
+### Writing Tests
+
+**Unit Test Example:**
+```typescript
+// src/lib/calculations/revenue-recognition.test.ts
+import { describe, it, expect } from 'vitest'
+import { calculateMonthlyRecognition } from './revenue-recognition'
+
+describe('calculateMonthlyRecognition', () => {
+  it('should calculate monthly recognition for evenly divisible amounts', () => {
+    const result = calculateMonthlyRecognition(12000, 12)
+    expect(result).toBe('1000.00')
+  })
+})
+```
+
+**Testing with Decimal.js:**
+```typescript
+import Decimal from 'decimal.js'
+
+// When summing financial values, use Decimal to avoid floating-point errors
+const total = schedule
+  .reduce((sum, amount) => sum.plus(amount), new Decimal(0))
+  .toNumber()
+```
+
+**Test File Location:**
+- Place tests next to the code they test: `revenue-recognition.ts` → `revenue-recognition.test.ts`
+- Use `.test.ts` or `.spec.ts` extension
+- Test utilities go in `src/test/utils/`
+
+**Running Tests:**
 ```bash
-# Use helper script (to be created)
-node scripts/test-auth-route.js http://localhost:3000/api/endpoint
+# Watch mode during development
+pnpm test
+
+# Run once (for CI)
+pnpm test:run
+
+# Visual UI for debugging
+pnpm test:ui
+
+# Coverage report
+pnpm test:coverage
 ```
 
 ### Manual Testing Checklist
@@ -405,6 +488,7 @@ const contracts = await prisma.contract.findMany({
 - **Validate inputs** with Zod
 - **Encrypt QB tokens** before storing
 - **Log critical actions** (imports, posts)
+- **Write tests** for critical business logic (revenue calculations, permissions)
 
 ### Never
 
@@ -478,6 +562,7 @@ prisma/
 - Auth/Permissions → `waterfall-auth`
 - Business Logic → `waterfall-business-logic`
 - UI/Components → `waterfall-ui-patterns`
+- Testing → `waterfall-testing`
 - Project Overview → `waterfall-overview`
 
 **Skills auto-activate** based on file context and keywords.

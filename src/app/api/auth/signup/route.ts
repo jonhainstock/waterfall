@@ -66,18 +66,18 @@ export async function POST(request: Request) {
     const userId = authData.user.id
 
     // 2. Create User record
-    const { data: user, error: userError } = await supabase
+    const userResult: any = await supabase
       .from('users')
       .insert({
         id: userId,
         email,
         name,
-      })
+      } as any)
       .select()
       .single()
 
-    if (userError) {
-      console.error('User record creation error:', userError)
+    if (userResult.error) {
+      console.error('User record creation error:', userResult.error)
       // Rollback: Delete auth user
       await supabase.auth.admin.deleteUser(userId)
       return NextResponse.json(
@@ -86,8 +86,10 @@ export async function POST(request: Request) {
       )
     }
 
+    const user = userResult.data
+
     // 3. Create Account
-    const { data: account, error: accountError } = await supabase
+    const accountResult: any = await supabase
       .from('accounts')
       .insert({
         name: companyName,
@@ -97,12 +99,12 @@ export async function POST(request: Request) {
         trial_ends_at: new Date(
           Date.now() + 14 * 24 * 60 * 60 * 1000
         ).toISOString(), // 14 days from now
-      })
+      } as any)
       .select()
       .single()
 
-    if (accountError) {
-      console.error('Account creation error:', accountError)
+    if (accountResult.error) {
+      console.error('Account creation error:', accountResult.error)
       // Rollback: Delete user and auth user
       await supabase.from('users').delete().eq('id', userId)
       await supabase.auth.admin.deleteUser(userId)
@@ -112,22 +114,24 @@ export async function POST(request: Request) {
       )
     }
 
+    const account = accountResult.data
+
     // 4. Create first Organization
     const organizationName =
       accountType === 'company' ? companyName : 'Example Client'
 
-    const { data: organization, error: orgError } = await supabase
+    const orgResult: any = await supabase
       .from('organizations')
       .insert({
         account_id: account.id,
         name: organizationName,
         is_active: true,
-      })
+      } as any)
       .select()
       .single()
 
-    if (orgError) {
-      console.error('Organization creation error:', orgError)
+    if (orgResult.error) {
+      console.error('Organization creation error:', orgResult.error)
       // Rollback: Delete account, user, and auth user
       await supabase.from('accounts').delete().eq('id', account.id)
       await supabase.from('users').delete().eq('id', userId)
@@ -138,6 +142,8 @@ export async function POST(request: Request) {
       )
     }
 
+    const organization = orgResult.data
+
     // 5. Create AccountUser membership (owner role)
     const { error: membershipError } = await supabase
       .from('account_users')
@@ -145,7 +151,7 @@ export async function POST(request: Request) {
         account_id: account.id,
         user_id: userId,
         role: 'owner',
-      })
+      } as any)
 
     if (membershipError) {
       console.error('Account membership creation error:', membershipError)

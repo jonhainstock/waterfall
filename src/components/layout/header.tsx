@@ -28,11 +28,13 @@ export async function Header() {
     .order('name', { ascending: true })
 
   // Get user details
-  const { data: userProfile } = await supabase
+  const userProfileResult: any = await supabase
     .from('users')
     .select('name, email')
     .eq('id', user.id)
     .single()
+
+  const userProfile = userProfileResult.data
 
   return (
     <header className="border-b border-gray-200 bg-white">
