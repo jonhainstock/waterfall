@@ -76,6 +76,32 @@ npx prisma studio
 npx supabase gen types typescript --project-id PROJECT_ID > types/supabase.ts
 ```
 
+### Next.js MCP (Model Context Protocol)
+
+**Automatic real-time access to dev server:**
+
+The Next.js MCP server (configured in `.mcp.json`) gives Claude live access to:
+- Build errors (TypeScript, ESLint)
+- Runtime errors (browser console)
+- Page metadata (routes, components, Server Actions)
+- Development logs
+
+**Available MCP Tools:**
+```typescript
+mcp__next-devtools__get_errors        // Current build/runtime errors
+mcp__next-devtools__get_logs          // Dev log file path
+mcp__next-devtools__get_page_metadata // Route information
+mcp__next-devtools__get_project_metadata // Project config
+mcp__next-devtools__get_server_action_by_id // Server Action source
+```
+
+**Auto-activates** when dev server runs (`pnpm dev`). No manual setup required.
+
+**Integration with hooks:**
+- **build-checker** hook uses MCP to get errors in real-time
+- **build-error-resolver** agent uses MCP for live error feed
+- Faster than running `tsc` separately
+
 ---
 
 ## Development Workflow

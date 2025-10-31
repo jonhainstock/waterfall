@@ -21,7 +21,14 @@ Check for TypeScript errors in files that were modified during this conversation
    - Check file extensions: `.ts`, `.tsx`
    - If no TypeScript files edited, skip check
 
-3. **Run TypeScript check:**
+3. **Get errors (MCP first, fallback to tsc):**
+
+   **Option A: Use MCP (preferred if dev server running):**
+   - Use: `mcp__next-devtools__get_errors`
+   - Returns build errors + runtime errors from dev server
+   - Faster and includes runtime errors too
+
+   **Option B: Fallback to tsc (if MCP not available):**
    - Execute: `npx tsc --noEmit`
    - Capture output
    - Parse for errors
@@ -112,6 +119,7 @@ Kill after 30 seconds, show timeout message
 
 ## Example Workflow
 
+### With MCP (Dev Server Running)
 ```
 User: "Create a new contract form component"
 
@@ -120,7 +128,24 @@ Claude: [Creates app/contracts/form.tsx with some type errors]
 [Stop hook triggers]
 → Read .edit-log.json
 → See form.tsx was edited
-→ Run npx tsc --noEmit
+→ Use mcp__next-devtools__get_errors (dev server is running)
+→ Find 2 errors in form.tsx (both build errors)
+→ Show errors to Claude
+→ Clear log
+
+Claude: "I see the TypeScript errors. Let me fix them..."
+```
+
+### Without MCP (Dev Server Not Running)
+```
+User: "Create a new contract form component"
+
+Claude: [Creates app/contracts/form.tsx with some type errors]
+
+[Stop hook triggers]
+→ Read .edit-log.json
+→ See form.tsx was edited
+→ MCP not available, fallback to: npx tsc --noEmit
 → Find 2 errors in form.tsx
 → Show errors to Claude
 → Clear log
@@ -130,6 +155,8 @@ Claude: "I see the TypeScript errors. Let me fix them..."
 
 ## Implementation
 
-Read edit log, check for TypeScript files, run tsc if needed, show results, clear log.
+Read edit log, check for TypeScript files, try MCP first (if available), fallback to tsc, show results, clear log.
 
 **This is the safety net that catches errors before they pile up.**
+
+**MCP advantage:** Gets both build AND runtime errors from dev server in real-time.

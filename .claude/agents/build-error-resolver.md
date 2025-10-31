@@ -14,12 +14,22 @@ Fix ALL TypeScript errors in the project, working methodically from start to fin
 
 ## Process
 
-### 1. Run Build Check
+### 1. Get Errors (MCP First, Fallback to tsc)
+
+**Preferred: Use MCP (if dev server running):**
+```typescript
+mcp__next-devtools__get_errors
+```
+Returns build + runtime errors from dev server in real-time.
+
+**Fallback: Use tsc (if MCP not available):**
 ```bash
 npx tsc --noEmit
 ```
 
 Capture ALL errors and their locations.
+
+**MCP Advantage:** Gets both TypeScript compilation errors AND runtime errors from the dev server.
 
 ### 2. Categorize Errors
 
@@ -29,6 +39,7 @@ Group errors by type:
 - Missing properties
 - Null/undefined issues
 - Generic type errors
+- Runtime errors (only from MCP)
 
 ### 3. Fix Systematically
 
@@ -37,7 +48,8 @@ Group errors by type:
 2. Fix type definitions
 3. Fix type mismatches
 4. Fix null/undefined handling
-5. Fix complex generic issues
+5. Fix runtime errors (if using MCP)
+6. Fix complex generic issues
 
 **For each error:**
 - Identify root cause
@@ -48,6 +60,13 @@ Group errors by type:
 ### 4. Verify After Each Batch
 
 After fixing 5-10 errors:
+
+**With MCP (preferred):**
+```typescript
+mcp__next-devtools__get_errors
+```
+
+**Fallback:**
 ```bash
 npx tsc --noEmit
 ```
@@ -63,6 +82,8 @@ Continue until:
 ```
 No errors found
 ```
+
+Or MCP returns empty error list.
 
 ## Common Fixes
 
