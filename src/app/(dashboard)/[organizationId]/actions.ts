@@ -621,3 +621,59 @@ export async function getActivityFeed(
 
   return { activities }
 }
+
+/**
+ * Update Organization Name
+ */
+export async function updateOrganizationName(
+  organizationId: string,
+  newName: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  // Check authentication
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  // Validate input
+  if (!newName || newName.trim().length === 0) {
+    return { success: false, error: 'Organization name is required' }
+  }
+
+  if (newName.trim().length > 100) {
+    return { success: false, error: 'Organization name must be less than 100 characters' }
+  }
+
+  // Verify user has access to this organization (RLS will also enforce this)
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id, account_id')
+    .eq('id', organizationId)
+    .single()
+
+  if (!org) {
+    return { success: false, error: 'Organization not found' }
+  }
+
+  // Update the organization name
+  const { error } = await supabase
+    .from('organizations')
+    .update({ name: newName.trim(), updated_at: new Date().toISOString() })
+    .eq('id', organizationId)
+
+  if (error) {
+    console.error('Failed to update organization name:', error)
+    return { success: false, error: 'Failed to update organization name' }
+  }
+
+  // Revalidate the organization page
+  revalidatePath(`/${organizationId}`)
+  revalidatePath('/account/organizations')
+
+  return { success: true }
+}

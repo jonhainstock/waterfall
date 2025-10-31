@@ -9,8 +9,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ImportButton } from '@/components/contracts/import-button'
-import { QuickBooksButton } from '@/components/quickbooks/quickbooks-button'
+import { OrganizationMenu } from '@/components/organizations/organization-menu'
 import { OrganizationTabs } from '@/components/organizations/organization-tabs'
+import type { AccountingPlatform } from '@/lib/accounting/types'
 
 export default async function OrganizationPage({
   params,
@@ -55,6 +56,16 @@ export default async function OrganizationPage({
   }
 
   const organization = orgResult.data
+
+  // Fetch accounting integration for this organization
+  const { data: integration } = await supabase
+    .from('accounting_integrations')
+    .select('platform, is_active')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .single()
+
+  const connectedPlatform = integration?.platform as AccountingPlatform | null
 
   // Fetch contracts for this organization
   const { data: contracts } = await supabase
@@ -106,8 +117,12 @@ export default async function OrganizationPage({
           </p>
         </div>
         <div className="mt-4 flex gap-3 sm:mt-0">
-          <QuickBooksButton organizationId={organizationId} />
           <ImportButton organizationId={organizationId} />
+          <OrganizationMenu
+            organizationId={organizationId}
+            organizationName={organization.name}
+            connectedPlatform={connectedPlatform}
+          />
         </div>
       </div>
 
@@ -117,6 +132,7 @@ export default async function OrganizationPage({
         activeTab={activeTab}
         contracts={contracts || []}
         schedules={schedules || []}
+        connectedPlatform={connectedPlatform}
       />
     </div>
   )

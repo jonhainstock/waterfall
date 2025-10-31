@@ -54,37 +54,41 @@ interface WaterfallTableProps {
   contracts: Contract[]
   schedules: Schedule[]
   organizationId: string
-  canPostToQuickBooks?: boolean
-  isQuickBooksConnected?: boolean
+  canPostToAccounting?: boolean
+  connectedPlatform?: string | null
 }
 
 export function WaterfallTable({
   contracts,
   schedules,
   organizationId,
-  canPostToQuickBooks = false,
-  isQuickBooksConnected = false,
+  canPostToAccounting = false,
+  connectedPlatform = null,
 }: WaterfallTableProps) {
   const router = useRouter()
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [qbConnected, setQbConnected] = useState(false)
+  const [accountingConnected, setAccountingConnected] = useState(false)
   const [hasAccountMapping, setHasAccountMapping] = useState(false)
+  const [platform, setPlatform] = useState<string | null>(null)
 
-  // Check QB connection and account mapping from localStorage (mock)
+  // Check accounting connection and account mapping from localStorage (mock)
   useEffect(() => {
-    const connected = localStorage.getItem(`qb_connected_${organizationId}`)
-    const mapping = localStorage.getItem(`qb_mapping_${organizationId}`)
+    const connected = localStorage.getItem(`accounting_connected_${organizationId}`)
+    const mapping = localStorage.getItem(`accounting_mapping_${organizationId}`)
+    const storedPlatform = localStorage.getItem(`accounting_platform_${organizationId}`)
 
-    setQbConnected(connected === 'true')
+    setAccountingConnected(connected === 'true')
     setHasAccountMapping(!!mapping)
+    setPlatform(storedPlatform)
   }, [organizationId])
 
-  // Use mock state for QB connection
-  const effectiveQbConnected = qbConnected
-  const effectiveCanPost = canPostToQuickBooks && qbConnected && hasAccountMapping
+  // Use mock state for accounting connection
+  const effectiveConnected = accountingConnected
+  const effectiveCanPost = canPostToAccounting && accountingConnected && hasAccountMapping
+  const platformDisplayName = platform === 'xero' ? 'Xero' : 'QuickBooks'
 
   // Get unique months across all schedules, sorted chronologically
   const months = useMemo(() => {
@@ -235,11 +239,11 @@ export function WaterfallTable({
       const result = await postMonthToQuickBooks(organizationId, selectedMonth)
 
       if (result.success) {
-        setSuccess(`Posted ${formatMonth(selectedMonth)} to QuickBooks (${result.journalEntryId})`)
+        setSuccess(`Posted ${formatMonth(selectedMonth)} to ${platformDisplayName} (${result.journalEntryId})`)
         setSelectedMonth(null)
         router.refresh()
       } else {
-        setError(result.error || 'Failed to post to QuickBooks')
+        setError(result.error || `Failed to post to ${platformDisplayName}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -330,14 +334,14 @@ export function WaterfallTable({
               ))}
             </TableRow>
 
-            {/* Actions row - Post to QuickBooks */}
-            {(canPostToQuickBooks || qbConnected) && (
+            {/* Actions row - Post to Accounting Platform */}
+            {(canPostToAccounting || accountingConnected) && (
               <TableRow className="bg-gray-50">
                 <TableCell
                   className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
                   colSpan={4}
                 >
-                  QuickBooks
+                  {platformDisplayName}
                 </TableCell>
 
                 {/* Post buttons for each month */}
@@ -360,13 +364,13 @@ export function WaterfallTable({
                           onClick={() => handlePostClick(month)}
                           size="sm"
                           disabled={monthTotal === 0}
-                          title={monthTotal === 0 ? 'No revenue to post' : 'Post to QuickBooks'}
+                          title={monthTotal === 0 ? 'No revenue to post' : `Post to ${platformDisplayName}`}
                           className="h-7 px-3 text-xs"
                         >
                           Post
                         </Button>
-                      ) : !qbConnected ? (
-                        <span className="text-xs text-gray-400" title="Connect QuickBooks first">
+                      ) : !accountingConnected ? (
+                        <span className="text-xs text-gray-400" title={`Connect ${platformDisplayName} first`}>
                           —
                         </span>
                       ) : !hasAccountMapping ? (

@@ -18,6 +18,7 @@ interface OrganizationTabsProps {
   activeTab: string
   contracts: any[]
   schedules: any[]
+  connectedPlatform?: string | null
 }
 
 export function OrganizationTabs({
@@ -25,6 +26,7 @@ export function OrganizationTabs({
   activeTab,
   contracts,
   schedules,
+  connectedPlatform,
 }: OrganizationTabsProps) {
   const router = useRouter()
 
@@ -58,8 +60,8 @@ export function OrganizationTabs({
             contracts={contracts || []}
             schedules={schedules || []}
             organizationId={organizationId}
-            canPostToQuickBooks={true}
-            isQuickBooksConnected={true}
+            canPostToAccounting={true}
+            connectedPlatform={connectedPlatform}
           />
         )}
       </TabsContent>
