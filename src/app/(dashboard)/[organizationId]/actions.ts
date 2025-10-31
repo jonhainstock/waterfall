@@ -82,11 +82,14 @@ export async function checkDuplicateContracts(
   }
 
   // Check for existing contracts with these invoice IDs
-  const { data: existingContracts, error } = (await supabase
+  const result = await supabase
     .from('contracts')
     .select('invoice_id, created_at, contract_amount')
     .eq('organization_id', organizationId)
-    .in('invoice_id', invoiceIds)) as { data: DuplicateContract[] | null; error: any }
+    .in('invoice_id', invoiceIds)
+
+  const existingContracts = result.data as DuplicateContract[] | null
+  const error = result.error
 
   if (error) {
     return { duplicates: [], error: `Failed to check duplicates: ${error.message}` }
@@ -345,11 +348,14 @@ export async function postMonthToQuickBooks(
   // TODO: Check if account mapping exists
 
   // Get schedules for this month
-  const { data: schedules, error: fetchError } = await supabase
+  const schedulesResult = await supabase
     .from('recognition_schedules')
     .select('id, recognition_amount, posted')
     .eq('organization_id', organizationId)
     .eq('recognition_month', month)
+
+  const schedules = schedulesResult.data as Array<{ id: string; recognition_amount: number; posted: boolean }> | null
+  const fetchError = schedulesResult.error
 
   if (fetchError || !schedules) {
     return { success: false, error: 'Failed to fetch schedules' }

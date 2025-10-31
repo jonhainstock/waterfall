@@ -34,12 +34,12 @@ interface ImportDialogProps {
 
 interface ContractRow {
   invoice_id: string
-  customer_name?: string
-  description?: string
+  customer_name: string | null
+  description: string | null
   amount: string
   start_date: string
-  end_date?: string
-  term_months?: string
+  end_date: string | null
+  term_months: string | null
 }
 
 interface DuplicateContract {
