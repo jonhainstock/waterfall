@@ -117,51 +117,52 @@ export async function POST(request: Request) {
       )
     }
 
+    // TODO: Re-enable subscription limits for production
     // Check subscription limits
-    const { data: account, error: accountError } = await supabase
-      .from('accounts')
-      .select('subscription_tier')
-      .eq('id', accountId)
-      .single()
+    // const { data: account, error: accountError } = await supabase
+    //   .from('accounts')
+    //   .select('subscription_tier')
+    //   .eq('id', accountId)
+    //   .single()
 
-    if (accountError || !account) {
-      return NextResponse.json(
-        { error: 'Account not found' },
-        { status: 404 }
-      )
-    }
+    // if (accountError || !account) {
+    //   return NextResponse.json(
+    //     { error: 'Account not found' },
+    //     { status: 404 }
+    //   )
+    // }
 
-    const { count: orgCount, error: countError } = await supabase
-      .from('organizations')
-      .select('*', { count: 'exact', head: true })
-      .eq('account_id', accountId)
-      .eq('is_active', true)
+    // const { count: orgCount, error: countError } = await supabase
+    //   .from('organizations')
+    //   .select('*', { count: 'exact', head: true })
+    //   .eq('account_id', accountId)
+    //   .eq('is_active', true)
 
-    if (countError) {
-      console.error('Organization count error:', countError)
-      return NextResponse.json(
-        { error: 'Failed to check organization limit' },
-        { status: 500 }
-      )
-    }
+    // if (countError) {
+    //   console.error('Organization count error:', countError)
+    //   return NextResponse.json(
+    //     { error: 'Failed to check organization limit' },
+    //     { status: 500 }
+    //   )
+    // }
 
-    // Check limits based on subscription tier
-    const limits: Record<string, number> = {
-      free: 1,
-      starter: 5,
-      pro: 50,
-    }
+    // // Check limits based on subscription tier
+    // const limits: Record<string, number> = {
+    //   free: 1,
+    //   starter: 5,
+    //   pro: 50,
+    // }
 
-    const limit = limits[account.subscription_tier] || 1
+    // const limit = limits[account.subscription_tier] || 1
 
-    if (orgCount !== null && orgCount >= limit) {
-      return NextResponse.json(
-        {
-          error: `Organization limit reached. ${account.subscription_tier} plan allows ${limit} organization(s).`,
-        },
-        { status: 403 }
-      )
-    }
+    // if (orgCount !== null && orgCount >= limit) {
+    //   return NextResponse.json(
+    //     {
+    //       error: `Organization limit reached. ${account.subscription_tier} plan allows ${limit} organization(s).`,
+    //     },
+    //     { status: 403 }
+    //   )
+    // }
 
     // Create organization
     const { data: organization, error: createError } = await supabase
