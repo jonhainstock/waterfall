@@ -1,17 +1,17 @@
 /**
- * Supabase Middleware Helpers
+ * Supabase Proxy Helpers
  *
- * Use these helpers in Next.js middleware to:
+ * Use these helpers in Next.js proxy (Next.js 16+) or middleware (Next.js 15) to:
  * - Refresh user sessions automatically
  * - Check authentication status
  * - Protect routes
  *
- * @example middleware.ts
+ * @example proxy.ts (Next.js 16+)
  * ```typescript
  * import { type NextRequest } from 'next/server'
  * import { updateSession } from '@/lib/supabase/middleware'
  *
- * export async function middleware(request: NextRequest) {
+ * export async function proxy(request: NextRequest) {
  *   return await updateSession(request)
  * }
  *

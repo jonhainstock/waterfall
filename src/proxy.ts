@@ -1,16 +1,18 @@
 /**
- * Next.js Middleware
+ * Next.js Proxy (Next.js 16+)
  *
  * Handles:
  * - Session refresh (keeps users logged in)
  * - Protected route authentication
  * - Redirect logic (auth users away from login, unauth users to login)
+ *
+ * Note: This replaces the deprecated middleware.ts file in Next.js 16.
  */
 
 import { type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return await updateSession(request)
 }
 
