@@ -1,31 +1,37 @@
 # Waterfall Data Model
 
-**Domain Skill** - Database schema, multi-tenancy, RLS policies, Prisma patterns
+**Domain Skill** - Database schema, multi-tenancy, RLS policies, Supabase patterns
 
 ## Overview
 
-This skill covers Waterfall's multi-tenant data model, Row Level Security (RLS) policies, Prisma ORM usage, and Supabase client patterns.
+This skill covers Waterfall's multi-tenant data model, Row Level Security (RLS) policies, Supabase client usage, and SQL migrations.
 
 **When to use this skill:**
 - Creating or modifying database schema
-- Writing Prisma queries
+- Writing Supabase queries
 - Implementing RLS policies
-- Working with Supabase client (server/browser)
-- Managing migrations
+- Working with Supabase client (server/browser/admin)
+- Managing SQL migrations
 - Multi-tenant data access patterns
+
+**Tech Stack:**
+- **Database:** Supabase (PostgreSQL)
+- **ORM:** None (Direct Supabase client queries)
+- **Migrations:** SQL files in `supabase/migrations/`
+- **Types:** Auto-generated from database via Supabase CLI
 
 ## Multi-Tenant Architecture
 
 ### Three-Tier Hierarchy
 
 ```
-User ←→ AccountUser ←→ Account
-                       ↓
-                  Organization
-                       ↓
-                   Contract
-                       ↓
-            RecognitionSchedule
+User ←→ AccountUser ←→ Account (Tenant)
+                         ↓
+                    Organization
+                         ↓
+                      Contract
+                         ↓
+              RecognitionSchedule
 ```
 
 **Key Principles:**
@@ -41,9 +47,9 @@ User ←→ AccountUser ←→ Account
    - RLS enforces data isolation at database level
 
 3. **User can belong to multiple Accounts**
-   - Users are global entities
+   - Users are global entities (stored in `public.users`)
+   - Links to Supabase Auth (`auth.users`)
    - AccountUser join table links users to accounts with roles
-   - Single email, multiple account memberships
 
 ## Core Entities
 
@@ -51,23 +57,28 @@ User ←→ AccountUser ←→ Account
 
 **Purpose:** The billing entity. One subscription, one team.
 
-**Key Fields:**
+**SQL Schema:**
+```sql
+CREATE TABLE accounts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  account_type TEXT NOT NULL CHECK (account_type IN ('company', 'firm')),
+  subscription_tier TEXT NOT NULL DEFAULT 'free',
+  subscription_status TEXT NOT NULL DEFAULT 'trial',
+  trial_ends_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**TypeScript Type:**
 ```typescript
-Account {
-  id              String   @id @default(uuid())
-  name            String
-  accountType     String   // "company" or "firm"
-  subscriptionTier String  // "free", "starter", "pro"
-  subscriptionStatus String // "trial", "active", "cancelled"
-  trialEndsAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
+type Account = Database['public']['Tables']['accounts']['Row']
 ```
 
 **Relationships:**
-- `accountUsers` - Team members (via AccountUser join table)
-- `organizations` - Client organizations
+- `account_users` → Team members (via AccountUser join table)
+- `organizations` → Client organizations
 
 **Business Rules:**
 - Free tier: 1 user, 1 organization
@@ -78,465 +89,595 @@ Account {
 
 **Purpose:** Individual person who can belong to multiple accounts.
 
-**Key Fields:**
+**SQL Schema:**
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**TypeScript Type:**
 ```typescript
-User {
-  id        String   @id // From Supabase Auth
-  email     String   @unique
-  name      String
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+type User = Database['public']['Tables']['users']['Row']
 ```
 
 **Relationships:**
-- `accountUsers` - Account memberships (via AccountUser join table)
+- `id` → References `auth.users(id)` (Supabase Auth)
+- `account_users` → Account memberships
 
 **Business Rules:**
 - Email must be unique globally
-- Users can be in multiple accounts (e.g., consultant works with multiple firms)
-- User ID comes from Supabase Auth (auth.uid())
+- ID comes from Supabase Auth (`auth.uid()`)
+- Users can be in multiple accounts
 
 ### AccountUser (Join Table)
 
 **Purpose:** Links users to accounts with roles.
 
-**Key Fields:**
-```typescript
-AccountUser {
-  id         String   @id @default(uuid())
-  accountId  String
-  userId     String
-  role       String   // "owner", "admin", "member"
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([accountId, userId])
-}
+**SQL Schema:**
+```sql
+CREATE TABLE account_users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, user_id)
+);
 ```
 
 **Roles:**
-- **owner** - Full control, billing, settings
-- **admin** - Manage team, organizations, contracts
-- **member** - Manage contracts only
+- `owner` - Full account control, billing, delete account
+- `admin` - Manage team, manage organizations, all member permissions
+- `member` - Manage contracts, post to QuickBooks, view dashboards
 
 ### Organization
 
-**Purpose:** A client business entity (the "client" in the multi-tenant system).
+**Purpose:** Client business entity with its own QuickBooks connection.
 
-**Key Fields:**
+**SQL Schema:**
+```sql
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  slug TEXT,
+  quickbooks_realm_id TEXT UNIQUE,
+  quickbooks_access_token TEXT,
+  quickbooks_refresh_token TEXT,
+  quickbooks_expires_at TIMESTAMPTZ,
+  account_mapping JSONB DEFAULT '{}',
+  settings JSONB DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**TypeScript Type:**
 ```typescript
-Organization {
-  id                      String   @id @default(uuid())
-  accountId               String
-  name                    String
-  slug                    String?
-  quickbooksRealmId       String?  @unique
-  quickbooksAccessToken   String?  // Encrypted
-  quickbooksRefreshToken  String?  // Encrypted
-  quickbooksExpiresAt     DateTime?
-  quickbooksConnectedAt   DateTime?
-  accountMapping          Json?    // { deferredRevenueAccountId, revenueAccountId }
-  settings                Json?
-  isActive                Boolean  @default(true)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+type Organization = Database['public']['Tables']['organizations']['Row']
+
+// Account mapping structure
+type AccountMapping = {
+  deferredRevenueAccountId: string
+  revenueAccountId: string
 }
 ```
 
-**Relationships:**
-- `account` - Parent account
-- `contracts` - Customer contracts
-- `recognitionSchedules` - Recognition entries (denormalized for RLS)
-
 **Business Rules:**
-- Each organization can connect to ONE QuickBooks company
-- QuickBooks realm ID must be unique across all organizations
-- Account mapping stored as JSON: `{ deferredRevenueAccountId: "123", revenueAccountId: "456" }`
+- Each organization has ONE QuickBooks connection
+- QuickBooks realm_id must be unique across all organizations
+- Account mapping stored as JSONB
 
 ### Contract
 
-**Purpose:** A customer contract that requires revenue recognition.
+**Purpose:** Customer contract requiring revenue recognition.
 
-**Key Fields:**
-```typescript
-Contract {
-  id                  String   @id @default(uuid())
-  organizationId      String
-  invoiceId           String   // User's invoice identifier
-  customerName        String?
-  description         String?
-  contractAmount      Decimal  @db.Decimal(12, 2)
-  startDate           DateTime @db.Date
-  endDate             DateTime @db.Date
-  termMonths          Int
-  monthlyRecognition  Decimal  @db.Decimal(12, 2)
-  status              String   @default("active") // "active", "completed", "cancelled"
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  @@unique([organizationId, invoiceId])
-}
+**SQL Schema:**
+```sql
+CREATE TABLE contracts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  invoice_id TEXT NOT NULL,
+  customer_name TEXT,
+  description TEXT,
+  contract_amount DECIMAL(12,2) NOT NULL CHECK (contract_amount > 0),
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  term_months INTEGER NOT NULL CHECK (term_months > 0),
+  monthly_recognition DECIMAL(12,2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(organization_id, invoice_id)
+);
 ```
 
-**Relationships:**
-- `organization` - Parent organization
-- `recognitionSchedules` - Monthly recognition entries
+**TypeScript Type:**
+```typescript
+type Contract = Database['public']['Tables']['contracts']['Row']
+```
 
 **Business Rules:**
-- `invoiceId` must be unique within organization
-- `contractAmount` must be positive
-- `termMonths` = months between startDate and endDate
-- `monthlyRecognition` = contractAmount ÷ termMonths (straight-line)
-- Status automatically changes to "completed" when endDate passes
+- `invoice_id` must be unique within organization
+- `monthly_recognition` = `contract_amount` / `term_months`
+- Status auto-changes to 'completed' when `end_date` passes
 
-### RecognitionSchedule
+### Recognition Schedule
 
 **Purpose:** Individual monthly recognition entries (the "waterfall").
 
-**Key Fields:**
-```typescript
-RecognitionSchedule {
-  id                 String   @id @default(uuid())
-  contractId         String
-  organizationId     String   // Denormalized for RLS performance
-  recognitionMonth   DateTime @db.Date // First day of month
-  recognitionAmount  Decimal  @db.Decimal(12, 2)
-  journalEntryId     String?  // QuickBooks JE ID
-  posted             Boolean  @default(false)
-  postedAt           DateTime?
-  postedBy           String?  // User ID
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@unique([contractId, recognitionMonth])
-}
+**SQL Schema:**
+```sql
+CREATE TABLE recognition_schedules (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  contract_id UUID NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  recognition_month DATE NOT NULL,
+  recognition_amount DECIMAL(12,2) NOT NULL,
+  journal_entry_id TEXT,
+  posted BOOLEAN NOT NULL DEFAULT false,
+  posted_at TIMESTAMPTZ,
+  posted_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(contract_id, recognition_month)
+);
 ```
 
-**Relationships:**
-- `contract` - Parent contract
-- `organization` - Parent organization (denormalized)
+**TypeScript Type:**
+```typescript
+type RecognitionSchedule = Database['public']['Tables']['recognition_schedules']['Row']
+```
 
 **Business Rules:**
 - One schedule entry per contract per month
-- `recognitionMonth` must be first day of month
+- `recognition_month` must be first day of month
 - Cannot modify after `posted = true`
-- Must track audit trail (who posted, when)
+- Track audit trail (who posted, when)
 
-### ImportLog
+## Querying with Supabase Client
 
-**Purpose:** Audit trail for CSV imports.
+### Basic Queries
 
-**Key Fields:**
+**SELECT:**
 ```typescript
-ImportLog {
-  id             String   @id @default(uuid())
-  organizationId String
-  importedBy     String   // User ID
-  filename       String
-  rowsProcessed  Int
-  rowsSucceeded  Int
-  rowsFailed     Int
-  errorDetails   Json?    // Array of errors
-  createdAt      DateTime @default(now())
-}
+import { createClient } from '@/lib/supabase/server'
+
+// Get all contracts for an organization
+const supabase = await createClient()
+const { data: contracts, error } = await supabase
+  .from('contracts')
+  .select('*')
+  .eq('organization_id', organizationId)
+  .order('start_date', { ascending: false })
+
+if (error) throw error
 ```
 
-**Business Rules:**
-- Create one log entry per import
-- Store detailed error information for debugging
-- Never delete (immutable audit trail)
+**INSERT:**
+```typescript
+const { data: contract, error } = await supabase
+  .from('contracts')
+  .insert({
+    organization_id: organizationId,
+    invoice_id: 'INV-001',
+    contract_amount: 12000,
+    start_date: '2025-01-01',
+    end_date: '2025-12-31',
+    term_months: 12,
+    monthly_recognition: 1000
+  })
+  .select()
+  .single()
+
+if (error) throw error
+```
+
+**UPDATE:**
+```typescript
+const { data: updated, error } = await supabase
+  .from('contracts')
+  .update({ status: 'completed' })
+  .eq('id', contractId)
+  .select()
+  .single()
+
+if (error) throw error
+```
+
+**DELETE:**
+```typescript
+const { error } = await supabase
+  .from('contracts')
+  .delete()
+  .eq('id', contractId)
+
+if (error) throw error
+```
+
+### Joins (Foreign Key Expansion)
+
+**Basic Join:**
+```typescript
+const { data, error } = await supabase
+  .from('contracts')
+  .select(`
+    *,
+    organization:organizations(id, name)
+  `)
+  .eq('organization_id', organizationId)
+```
+
+**Nested Joins:**
+```typescript
+const { data, error } = await supabase
+  .from('organizations')
+  .select(`
+    *,
+    account:accounts(
+      id,
+      name,
+      account_type
+    ),
+    contracts(
+      id,
+      invoice_id,
+      contract_amount,
+      recognition_schedules(
+        id,
+        recognition_month,
+        recognition_amount,
+        posted
+      )
+    )
+  `)
+  .eq('id', organizationId)
+  .single()
+```
+
+### Aggregations
+
+**Count:**
+```typescript
+const { count, error } = await supabase
+  .from('contracts')
+  .select('*', { count: 'exact', head: true })
+  .eq('organization_id', organizationId)
+  .eq('status', 'active')
+```
+
+**Sum (using PostgreSQL function):**
+```typescript
+// Create function in migration:
+// CREATE FUNCTION get_total_deferred_revenue(org_id UUID)
+// RETURNS DECIMAL AS $$
+//   SELECT SUM(recognition_amount)
+//   FROM recognition_schedules
+//   WHERE organization_id = org_id AND posted = false
+// $$ LANGUAGE SQL;
+
+const { data: total, error } = await supabase
+  .rpc('get_total_deferred_revenue', { org_id: organizationId })
+```
+
+### Filters
+
+```typescript
+// Multiple conditions
+const { data, error } = await supabase
+  .from('contracts')
+  .select('*')
+  .eq('organization_id', organizationId)
+  .eq('status', 'active')
+  .gte('end_date', new Date().toISOString())
+  .limit(50)
+
+// OR conditions
+const { data, error } = await supabase
+  .from('contracts')
+  .select('*')
+  .or('status.eq.active,status.eq.completed')
+
+// NOT
+const { data, error } = await supabase
+  .from('contracts')
+  .select('*')
+  .not('status', 'eq', 'cancelled')
+
+// IN
+const { data, error } = await supabase
+  .from('contracts')
+  .select('*')
+  .in('status', ['active', 'completed'])
+```
 
 ## Row Level Security (RLS)
 
-**Core Principle:** Users can only access data in organizations that belong to their account.
+### Core Principle
 
-### Why RLS?
+Users can only access data in organizations that belong to their account.
 
-- **Database-level enforcement** - Cannot be bypassed by application bugs
-- **Automatic filtering** - No manual WHERE clauses needed
-- **Security safety net** - Catches auth mistakes
-- **Cascading access** - Foreign key relationships enforce access
+### How RLS Works
 
-### RLS Policy Patterns
+1. **Enabled on all tables** - Database enforces access control
+2. **Uses auth.uid()** - Current user's ID from Supabase Auth
+3. **Cascading policies** - Organizations check accounts, contracts check organizations
+4. **Automatic filtering** - Queries automatically filtered by RLS
+
+### Example Policy
 
 **Organizations Table:**
 ```sql
-CREATE POLICY "Users access their account's organizations"
-ON organizations
-FOR ALL
-USING (
-  account_id IN (
-    SELECT account_id
-    FROM account_users
-    WHERE user_id = auth.uid()
-  )
-);
+CREATE POLICY "Users can view their account's organizations"
+  ON organizations FOR SELECT
+  USING (
+    account_id IN (
+      SELECT account_id
+      FROM account_users
+      WHERE user_id = auth.uid()
+    )
+  );
 ```
 
-**Contracts Table:**
+**Cascading Policy (Contracts):**
 ```sql
-CREATE POLICY "Users access their organizations' contracts"
-ON contracts
-FOR ALL
-USING (
-  organization_id IN (
-    SELECT id FROM organizations
-    -- RLS on organizations table handles access check
-  )
-);
+CREATE POLICY "Users can view their organizations' contracts"
+  ON contracts FOR SELECT
+  USING (
+    organization_id IN (
+      SELECT id FROM organizations
+      -- RLS on organizations table handles access check
+    )
+  );
 ```
 
-**Recognition Schedules Table:**
+### Testing RLS
+
+**In Supabase SQL Editor:**
 ```sql
-CREATE POLICY "Users access their organizations' schedules"
-ON recognition_schedules
-FOR ALL
-USING (
-  organization_id IN (
-    SELECT id FROM organizations
-  )
+-- Set user context
+SET LOCAL jwt.claims.sub = 'user-uuid-here';
+
+-- Now queries run as that user
+SELECT * FROM organizations; -- Only shows accessible orgs
+```
+
+### Bypassing RLS (Admin Operations)
+
+Use the admin client (service role key):
+
+```typescript
+import { createAdminClient } from '@/lib/supabase/admin'
+
+const supabase = createAdminClient()
+
+// This query bypasses RLS - use carefully!
+const { data, error } = await supabase
+  .from('organizations')
+  .select('*')
+```
+
+**⚠️ WARNING:** Service role key has FULL access. Only use in trusted server code.
+
+## Migration Patterns
+
+### File Naming
+
+Use timestamp-based naming:
+```
+YYYYMMDDHHMMSS_description.sql
+```
+
+Example:
+```
+20241030000001_initial_schema.sql
+20241030000002_rls_policies.sql
+20241030120000_add_user_preferences.sql
+```
+
+### Migration Structure
+
+```sql
+-- Description of what this migration does
+
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create tables
+CREATE TABLE tablename (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  -- columns
 );
+
+-- Create indexes
+CREATE INDEX idx_tablename_column ON tablename(column);
+
+-- Create triggers
+CREATE TRIGGER trigger_name
+  BEFORE UPDATE ON tablename
+  FOR EACH ROW
+  EXECUTE FUNCTION function_name();
+
+-- Add comments
+COMMENT ON TABLE tablename IS 'Description';
 ```
 
-**How Cascading Works:**
-1. User tries to query contracts
-2. RLS checks: Is contract's organization_id in accessible organizations?
-3. To check organizations, RLS on organizations table runs
-4. Organizations RLS checks: Does user's account own this organization?
-5. Access granted only if full chain passes
+### Best Practices
 
-### Denormalization for Performance
+1. **Idempotency** - Use `IF NOT EXISTS` where possible
+2. **Ordering** - Run migrations in timestamp order
+3. **Atomic** - One logical change per migration
+4. **Reversible** - Document how to rollback
+5. **Tested** - Test in development before production
 
-Notice `organizationId` is denormalized in `RecognitionSchedule`:
+### Running Migrations
 
-```typescript
-RecognitionSchedule {
-  contractId     String
-  organizationId String  // Denormalized from contract.organizationId
-}
-```
+**Remote-Only Workflow:**
 
-**Why?**
-- RLS can check `organization_id` directly without joining through `contracts`
-- Faster queries, simpler RLS policies
-- Trade-off: Slight data duplication for security performance
+1. Create migration file in `supabase/migrations/`
+2. Copy SQL to Supabase Dashboard → SQL Editor
+3. Execute
+4. Verify in Table Editor
+5. Regenerate types: `npm run supabase:types`
 
-## Supabase Client Patterns
+**See:** `supabase/migrations/README.md` for detailed instructions
 
-### Server vs Browser Client
+## Type Generation
 
-**Server Client** (`lib/supabase/server.ts`):
-- Use in Server Components, API routes, Server Actions
-- Has service role key (bypasses RLS if needed)
-- Accesses user session via cookies
-
-**Browser Client** (`lib/supabase/client.ts`):
-- Use in Client Components ("use client")
-- Never has service role key
-- Always subject to RLS
-- Accesses user session from browser storage
-
-### When to Use Which?
-
-| Context | Client Type | Why |
-|---------|-------------|-----|
-| Server Component | Server | Data fetching, no user interaction |
-| API Route | Server | Backend logic, auth checks |
-| Server Action | Server | Form submissions, mutations |
-| Client Component | Browser | Interactive UI, real-time subscriptions |
-
-**Resource File:** See `resources/supabase-client-patterns.md` for detailed examples.
-
-## Prisma Patterns
-
-### Basic Query Pattern
-
-```typescript
-import { prisma } from '@/lib/db'
-
-// Fetch user's organizations
-const organizations = await prisma.organization.findMany({
-  where: {
-    accountId: {
-      in: userAccountIds  // From AccountUser join
-    }
-  },
-  include: {
-    contracts: true
-  }
-})
-```
-
-### Multi-Tenant Query Pattern
-
-**Always filter by account/organization:**
-
-```typescript
-// Get contracts for specific organization
-const contracts = await prisma.contract.findMany({
-  where: {
-    organizationId: orgId,
-    organization: {
-      accountId: {
-        in: userAccountIds  // Verify user has access
-      }
-    }
-  }
-})
-```
-
-**Never query without tenant filter:**
-```typescript
-// ❌ BAD - No tenant filter
-const contracts = await prisma.contract.findMany()
-
-// ✅ GOOD - Always filter by organization/account
-const contracts = await prisma.contract.findMany({
-  where: {
-    organizationId: orgId
-  }
-})
-```
-
-### Transactions for Multi-Step Operations
-
-```typescript
-await prisma.$transaction(async (tx) => {
-  // Create contract
-  const contract = await tx.contract.create({
-    data: {
-      organizationId,
-      invoiceId,
-      contractAmount,
-      startDate,
-      endDate,
-      termMonths,
-      monthlyRecognition
-    }
-  })
-
-  // Create recognition schedules
-  const schedules = generateSchedules(contract)
-  await tx.recognitionSchedule.createMany({
-    data: schedules
-  })
-})
-```
-
-**Resource File:** See `resources/prisma-schema-patterns.md` for complete schema examples.
-
-## Migrations
-
-### Creating Migrations
+### Generate Types
 
 ```bash
-# Create migration file
-npx prisma migrate dev --name add_import_log_table
-
-# Apply migrations to production
-npx prisma migrate deploy
-
-# Generate Prisma Client (after schema changes)
-npx prisma generate
+# Add SUPABASE_PROJECT_ID to .env.local
+npm run supabase:types
 ```
 
-### Migration Best Practices
+This creates `src/types/supabase.ts` with auto-generated types.
 
-1. **Always create migrations for schema changes** - Never edit database directly
-2. **Test migrations locally first** - Run on dev database before production
-3. **One logical change per migration** - Easier to rollback if needed
-4. **Name migrations descriptively** - `add_quickbooks_fields`, not `update_schema`
-5. **Include RLS policies** - Create SQL migrations for RLS changes
+### Using Generated Types
 
-**Resource File:** See `resources/migrations-guide.md` for detailed migration workflow.
+```typescript
+// Import database types
+import { Database } from '@/types/supabase'
+
+// Create type helpers
+export type Account = Database['public']['Tables']['accounts']['Row']
+export type AccountInsert = Database['public']['Tables']['accounts']['Insert']
+export type AccountUpdate = Database['public']['Tables']['accounts']['Update']
+
+// Use in Supabase client
+const supabase = createClient<Database>()
+```
+
+### Type Safety
+
+**Queries are fully typed:**
+```typescript
+const { data, error } = await supabase
+  .from('contracts') // ← autocomplete
+  .select('*')        // ← type-checked
+  .eq('status', 'active') // ← column name autocomplete, value type-checked
+```
 
 ## Common Patterns
 
-### Get User's Organizations
+### Multi-Step Operations (No Transactions)
 
+**Option 1: PostgreSQL Function**
+```sql
+CREATE OR REPLACE FUNCTION create_contract_with_schedules(...)
+RETURNS UUID AS $$
+BEGIN
+  -- Insert contract
+  -- Insert schedules
+  -- All in one transaction
+END;
+$$ LANGUAGE plpgsql;
+```
+
+**Option 2: Manual Cleanup**
 ```typescript
-async function getUserOrganizations(userId: string) {
-  return await prisma.organization.findMany({
-    where: {
-      account: {
-        accountUsers: {
-          some: {
-            userId: userId
-          }
-        }
-      }
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  })
+async function createContractWithSchedules(contract, schedules) {
+  const { data: newContract, error: contractError } = await supabase
+    .from('contracts')
+    .insert(contract)
+    .select()
+    .single()
+
+  if (contractError) throw contractError
+
+  const { error: schedulesError } = await supabase
+    .from('recognition_schedules')
+    .insert(schedules.map(s => ({ ...s, contract_id: newContract.id })))
+
+  if (schedulesError) {
+    // Cleanup: delete contract
+    await supabase.from('contracts').delete().eq('id', newContract.id)
+    throw schedulesError
+  }
+
+  return newContract
 }
 ```
 
-### Check Organization Access
+### Decimal Handling
+
+PostgreSQL returns decimals as strings:
 
 ```typescript
-async function canAccessOrganization(userId: string, organizationId: string): Promise<boolean> {
-  const org = await prisma.organization.findFirst({
-    where: {
-      id: organizationId,
-      account: {
-        accountUsers: {
-          some: {
-            userId: userId
-          }
-        }
-      }
-    }
-  })
+import Decimal from 'decimal.js'
 
-  return !!org
-}
+const { data: contract } = await supabase
+  .from('contracts')
+  .select('contract_amount')
+  .single()
+
+// contract.contract_amount is a string!
+const amount = new Decimal(contract.contract_amount)
 ```
 
-### Get User Role in Account
+### Date Handling
+
+Supabase returns ISO 8601 strings:
 
 ```typescript
-async function getUserRole(userId: string, accountId: string): Promise<string | null> {
-  const accountUser = await prisma.accountUser.findUnique({
-    where: {
-      accountId_userId: {
-        accountId,
-        userId
-      }
-    },
-    select: {
-      role: true
-    }
-  })
+const { data: contract } = await supabase
+  .from('contracts')
+  .select('start_date')
+  .single()
 
-  return accountUser?.role || null
-}
+// Parse to Date
+const startDate = new Date(contract.start_date)
 ```
 
 ## Resource Files
 
-For detailed implementations, see:
+For detailed patterns and examples, see:
 
-- **`resources/prisma-schema-patterns.md`** - Complete Prisma schema, relationships, indexes
-- **`resources/rls-policies.md`** - Detailed RLS policy examples and explanations
-- **`resources/supabase-client-patterns.md`** - Server vs client usage, auth patterns
-- **`resources/migrations-guide.md`** - Migration workflow, best practices, troubleshooting
+- **supabase-schema-patterns.md** - SQL schema patterns and best practices
+- **rls-policies.md** - Complete RLS policy examples
+- **supabase-client-patterns.md** - Advanced Supabase client usage
+- **migrations-guide.md** - Migration workflow and best practices
 
-## Best Practices
+## Key Differences from Prisma
+
+| Feature | Prisma | Supabase |
+|---------|--------|----------|
+| **Query Language** | JavaScript/TypeScript | JavaScript/TypeScript |
+| **Schema** | schema.prisma file | SQL migrations |
+| **Migrations** | Prisma CLI | SQL files |
+| **Types** | Generated from schema | Generated from database |
+| **Joins** | include/select | Foreign key expansion |
+| **Transactions** | Built-in | PostgreSQL functions |
+| **Error Handling** | Try/catch (throws) | Check error tuple |
+| **RLS** | Application-level | Database-level |
+
+## Summary
+
+**Use Supabase client for:**
+- All database operations
+- Type-safe queries
+- RLS enforcement
+- Real-time subscriptions (future)
+
+**Use SQL migrations for:**
+- Schema changes
+- Index creation
+- RLS policy updates
+- Database functions
+
+**Use admin client for:**
+- Signup flow (bypass RLS)
+- System operations
+- Bulk data operations
 
 **Always:**
-- Use RLS policies for all tables with sensitive data
-- Filter queries by account/organization
-- Use transactions for multi-step operations
-- Use Decimal type for monetary values
-- Index foreign keys and frequently queried fields
-
-**Never:**
-- Query without tenant filters (organization/account)
-- Bypass RLS in application code
-- Use floating-point types for money (use Decimal)
-- Delete audit trail data (ImportLog, posted schedules)
-- Allow editing posted recognition schedules
+- Check error after queries
+- Use TypeScript types
+- Let RLS filter data
+- Regenerate types after migrations
