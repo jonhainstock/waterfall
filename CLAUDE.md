@@ -12,7 +12,6 @@
 
 - Next.js 16 (App Router) + TypeScript
 - Supabase (PostgreSQL + Auth + RLS)
-- Prisma ORM
 - shadcn/ui + Tailwind CSS
 - QuickBooks Online API
 - Vercel deployment
@@ -22,7 +21,7 @@
 All technical patterns are in **Skills** (auto-activate based on context):
 
 - **waterfall-overview** - Architecture, project structure, quick reference
-- **waterfall-data-model** - Database schema, Prisma, RLS policies, Supabase
+- **waterfall-data-model** - Database schema, RLS policies, Supabase
 - **waterfall-auth** - Authentication, permissions, roles, team management
 - **waterfall-business-logic** - Revenue recognition, CSV import, QuickBooks
 - **waterfall-ui-patterns** - React components, forms, tables, shadcn/ui
@@ -90,25 +89,6 @@ pnpm build
 
 # Start production server
 pnpm start
-```
-
-### Database
-
-```bash
-# Create migration
-npx prisma migrate dev --name migration_name
-
-# Apply migrations (production)
-npx prisma migrate deploy
-
-# Generate Prisma Client
-npx prisma generate
-
-# Reset database (dev only, deletes data!)
-npx prisma migrate reset
-
-# Open Prisma Studio
-npx prisma studio
 ```
 
 ### Supabase
