@@ -10,7 +10,7 @@
 
 ### Tech Stack
 
-- Next.js 14 (App Router) + TypeScript
+- Next.js 16 (App Router) + TypeScript
 - Supabase (PostgreSQL + Auth + RLS)
 - Prisma ORM
 - shadcn/ui + Tailwind CSS
