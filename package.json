@@ -8,12 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "supabase:start": "supabase start",
-    "supabase:stop": "supabase stop",
-    "supabase:types": "supabase gen types typescript --linked > src/types/supabase.ts",
-    "supabase:types:local": "supabase gen types typescript --local > src/types/supabase.ts",
-    "supabase:reset": "supabase db reset",
-    "supabase:migration": "supabase migration new"
+    "supabase:types": "supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" > src/types/supabase.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
