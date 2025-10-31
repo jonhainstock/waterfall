@@ -82,11 +82,11 @@ export async function checkDuplicateContracts(
   }
 
   // Check for existing contracts with these invoice IDs
-  const { data: existingContracts, error } = await supabase
+  const { data: existingContracts, error } = (await supabase
     .from('contracts')
     .select('invoice_id, created_at, contract_amount')
     .eq('organization_id', organizationId)
-    .in('invoice_id', invoiceIds)
+    .in('invoice_id', invoiceIds)) as { data: DuplicateContract[] | null; error: any }
 
   if (error) {
     return { duplicates: [], error: `Failed to check duplicates: ${error.message}` }
