@@ -21,7 +21,7 @@ export default async function OrganizationsPage() {
     redirect('/login')
   }
 
-  // Get user's organizations (RLS automatically filters)
+  // Get user's organizations with accounting integrations (RLS automatically filters)
   const { data: organizations, error } = await supabase
     .from('organizations')
     .select(`
@@ -29,12 +29,15 @@ export default async function OrganizationsPage() {
       name,
       is_active,
       created_at,
-      quickbooks_realm_id,
       account:accounts(
         id,
         name,
         account_type,
         subscription_tier
+      ),
+      accounting_integrations(
+        platform,
+        is_active
       )
     `)
     .eq('is_active', true)
@@ -120,7 +123,7 @@ export default async function OrganizationsPage() {
                   </div>
 
                   <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-                    {org.quickbooks_realm_id ? (
+                    {org.accounting_integrations?.[0]?.platform ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-green-700">
                         <svg
                           className="h-3 w-3"
@@ -129,7 +132,7 @@ export default async function OrganizationsPage() {
                         >
                           <circle cx="4" cy="4" r="3" />
                         </svg>
-                        QuickBooks Connected
+                        {org.accounting_integrations[0].platform === 'quickbooks' ? 'QuickBooks' : 'Xero'} Connected
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-gray-600">

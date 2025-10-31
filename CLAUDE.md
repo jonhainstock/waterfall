@@ -248,26 +248,52 @@ monthly_recognition = contract_amount ÷ term_months
 - Dates in YYYY-MM-DD format
 - End date after start date
 
-### QuickBooks
+### Accounting Integrations (QuickBooks & Xero)
 
-**OAuth Flow:**
-1. User clicks "Connect to QuickBooks"
-2. Redirect to Intuit OAuth
+**Multi-Platform Architecture:**
+- Organizations connect to ONE platform (QuickBooks OR Xero)
+- Adapter pattern handles platform-specific APIs
+- Shared interfaces for OAuth, account mapping, posting
+
+**Database:**
+- `accounting_integrations` table stores connection per org
+- Platform field: `'quickbooks' | 'xero'`
+- OAuth tokens (encrypted), realm/tenant ID, account mapping
+
+**OAuth Flow (Both Platforms):**
+1. User clicks "Connect to [Platform]"
+2. Redirect to platform OAuth endpoint
 3. User authorizes
-4. Save encrypted tokens to organization
-5. Prompt for account mapping
+4. Exchange code for tokens
+5. Save encrypted tokens to `accounting_integrations`
+6. Prompt for account mapping
 
-**Journal Entry:**
+**Account Mapping:**
+- Deferred Revenue Account (Liability)
+- Revenue Account (Income)
+- Stored as JSON in `account_mapping` field
+
+**Journal Entry Posting:**
 - Date: Last day of recognition month
 - Debit: Deferred Revenue Account
 - Credit: Revenue Account
 - Memo: "Waterfall - Revenue Recognition for [Month Year]"
+- Uses provider adapter (`QuickBooksProvider` or `XeroProvider`)
 
 **Audit Trail:**
 - Track who posted (userId)
 - Track when posted (timestamp)
-- Store QuickBooks JE ID
+- Store external entry ID (QuickBooks JE ID or Xero Manual Journal ID)
 - Never allow editing posted schedules
+
+**Provider Pattern:**
+```typescript
+// Get provider for organization's platform
+const provider = getAccountingProvider(integration.platform)
+
+// Post journal entry (same interface for both)
+const result = await provider.postJournalEntry(tokens, params)
+```
 
 ---
 
@@ -287,6 +313,11 @@ QUICKBOOKS_CLIENT_ID="..."
 QUICKBOOKS_CLIENT_SECRET="..."
 QUICKBOOKS_REDIRECT_URI="http://localhost:3000/api/quickbooks/callback"
 QUICKBOOKS_ENVIRONMENT="sandbox" # or "production"
+
+# Xero
+XERO_CLIENT_ID="..."
+XERO_CLIENT_SECRET="..."
+XERO_REDIRECT_URI="http://localhost:3000/api/xero/callback"
 
 # App
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -486,7 +517,7 @@ const contracts = await prisma.contract.findMany({
 - **Filter by organization** in all queries
 - **Check permissions** before operations
 - **Validate inputs** with Zod
-- **Encrypt QB tokens** before storing
+- **Encrypt OAuth tokens** before storing (QuickBooks, Xero)
 - **Log critical actions** (imports, posts)
 - **Write tests** for critical business logic (revenue calculations, permissions)
 
@@ -531,12 +562,18 @@ components/
 ├── layout/                       # Header, sidebar, org-switcher
 ├── contracts/                    # Contract features
 ├── schedule/                     # Waterfall views
-└── quickbooks/                   # QB integration
+├── accounting/                   # Platform-agnostic integration UI
+└── quickbooks/                   # QuickBooks-specific (legacy)
 
 lib/
 ├── supabase/                     # Server/client/admin clients
 ├── auth/                         # Permission helpers
-├── quickbooks/                   # QB OAuth & API
+├── accounting/                   # Multi-platform integration
+│   ├── types.ts                 # Shared interfaces
+│   ├── provider-factory.ts      # Get provider by platform
+│   └── providers/
+│       ├── quickbooks.ts        # QuickBooks adapter
+│       └── xero.ts              # Xero adapter
 ├── calculations/                 # Revenue recognition
 ├── import/                       # CSV/Excel parsing
 └── db.ts                         # Prisma client

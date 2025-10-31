@@ -37,7 +37,6 @@ export async function GET() {
         slug,
         is_active,
         created_at,
-        quickbooks_realm_id,
         account:accounts(
           id,
           name,

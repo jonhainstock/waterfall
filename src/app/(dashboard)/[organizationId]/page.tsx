@@ -40,7 +40,6 @@ export default async function OrganizationPage({
       `
       id,
       name,
-      quickbooks_realm_id,
       account:accounts(
         id,
         name

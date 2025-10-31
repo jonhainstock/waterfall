@@ -53,6 +53,59 @@ export type Database = {
           },
         ]
       }
+      accounting_integrations: {
+        Row: {
+          access_token: string | null
+          account_mapping: Json | null
+          connected_at: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          platform: string
+          realm_id: string | null
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          account_mapping?: Json | null
+          connected_at?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          platform: string
+          realm_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          account_mapping?: Json | null
+          connected_at?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          platform?: string
+          realm_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts: {
         Row: {
           account_type: string
@@ -201,11 +254,6 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
-          quickbooks_access_token: string | null
-          quickbooks_connected_at: string | null
-          quickbooks_expires_at: string | null
-          quickbooks_realm_id: string | null
-          quickbooks_refresh_token: string | null
           settings: Json | null
           slug: string | null
           updated_at: string
@@ -217,11 +265,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
-          quickbooks_access_token?: string | null
-          quickbooks_connected_at?: string | null
-          quickbooks_expires_at?: string | null
-          quickbooks_realm_id?: string | null
-          quickbooks_refresh_token?: string | null
           settings?: Json | null
           slug?: string | null
           updated_at?: string
@@ -233,11 +276,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
-          quickbooks_access_token?: string | null
-          quickbooks_connected_at?: string | null
-          quickbooks_expires_at?: string | null
-          quickbooks_realm_id?: string | null
-          quickbooks_refresh_token?: string | null
           settings?: Json | null
           slug?: string | null
           updated_at?: string

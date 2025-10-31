@@ -304,22 +304,27 @@ interface ActivityFeedResult {
   error?: string
 }
 
-interface PostToQuickBooksResult {
+interface PostToAccountingResult {
   success: boolean
   journalEntryId?: string
   error?: string
+  platform?: string
 }
 
+// For backward compatibility
+type PostToQuickBooksResult = PostToAccountingResult
+
 /**
- * Post a month's revenue recognition to QuickBooks (MOCK implementation)
+ * Post a month's revenue recognition to accounting platform
  *
- * This is a mockup - it doesn't actually call QuickBooks API yet.
- * It simulates posting by marking schedules as posted with mock audit data.
+ * Platform-agnostic implementation that works with QuickBooks, Xero, or any
+ * configured accounting platform. Uses the adapter pattern to handle
+ * platform-specific API calls.
  */
-export async function postMonthToQuickBooks(
+export async function postMonthToAccounting(
   organizationId: string,
   month: string
-): Promise<PostToQuickBooksResult> {
+): Promise<PostToAccountingResult> {
   const supabase = await createClient()
 
   // Check authentication
@@ -343,9 +348,26 @@ export async function postMonthToQuickBooks(
     return { success: false, error: 'Organization not found' }
   }
 
-  // TODO: Check if user has post_to_quickbooks permission
-  // TODO: Check if organization is connected to QuickBooks
-  // TODO: Check if account mapping exists
+  // Get accounting integration for this organization
+  const { data: integration } = await supabase
+    .from('accounting_integrations')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .single()
+
+  if (!integration) {
+    return { success: false, error: 'No accounting platform connected' }
+  }
+
+  // Check if account mapping exists
+  if (!integration.account_mapping) {
+    return { success: false, error: 'Account mapping not configured' }
+  }
+
+  // TODO: Check if user has post_to_accounting permission
+  // const canPost = await hasPermission(user.id, organizationId, 'post_to_quickbooks')
+  // if (!canPost) return { success: false, error: 'Permission denied' }
 
   // Get schedules for this month
   const schedulesResult = await supabase
@@ -354,7 +376,11 @@ export async function postMonthToQuickBooks(
     .eq('organization_id', organizationId)
     .eq('recognition_month', month)
 
-  const schedules = schedulesResult.data as Array<{ id: string; recognition_amount: number; posted: boolean }> | null
+  const schedules = schedulesResult.data as Array<{
+    id: string
+    recognition_amount: number
+    posted: boolean
+  }> | null
   const fetchError = schedulesResult.error
 
   if (fetchError || !schedules) {
@@ -368,14 +394,59 @@ export async function postMonthToQuickBooks(
   // Check if already posted
   const alreadyPosted = schedules.some((s) => s.posted)
   if (alreadyPosted) {
-    return { success: false, error: 'Month already posted to QuickBooks' }
+    return {
+      success: false,
+      error: `Month already posted to ${integration.platform}`,
+    }
   }
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 1000))
+  // Calculate total amount
+  const totalAmount = schedules.reduce((sum, s) => sum + s.recognition_amount, 0)
 
-  // Mock journal entry ID
-  const mockJournalEntryId = `JE-MOCK-${Date.now()}`
+  // Get the accounting provider for this platform
+  const { getAccountingProvider } = await import('@/lib/accounting/provider-factory')
+  const provider = getAccountingProvider(integration.platform as any)
+
+  // Prepare tokens
+  const tokens = {
+    accessToken: integration.access_token || '',
+    refreshToken: integration.refresh_token || '',
+    expiresAt: integration.expires_at || '',
+    realmId: integration.realm_id || '',
+  }
+
+  // Prepare journal entry parameters
+  const accountMapping = integration.account_mapping as any
+  const lastDayOfMonth = new Date(month)
+  lastDayOfMonth.setMonth(lastDayOfMonth.getMonth() + 1)
+  lastDayOfMonth.setDate(0) // Last day of the month
+
+  const journalEntryParams = {
+    date: lastDayOfMonth.toISOString().split('T')[0],
+    memo: `Waterfall - Revenue Recognition for ${month}`,
+    lines: [
+      {
+        accountId: accountMapping.deferredRevenueAccountId,
+        description: 'Deferred Revenue Recognition',
+        debit: totalAmount,
+      },
+      {
+        accountId: accountMapping.revenueAccountId,
+        description: 'Revenue Recognition',
+        credit: totalAmount,
+      },
+    ],
+  }
+
+  // Post journal entry using the provider
+  const result = await provider.postJournalEntry(tokens, journalEntryParams)
+
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error || 'Failed to post journal entry',
+    }
+  }
 
   // Update schedules to mark as posted
   const scheduleIds = schedules.map((s) => s.id)
@@ -385,7 +456,7 @@ export async function postMonthToQuickBooks(
       posted: true,
       posted_at: new Date().toISOString(),
       posted_by: user.id,
-      journal_entry_id: mockJournalEntryId,
+      journal_entry_id: result.entryId || null,
     })
     .in('id', scheduleIds)
 
@@ -396,7 +467,27 @@ export async function postMonthToQuickBooks(
   // Revalidate the organization page
   revalidatePath(`/${organizationId}`)
 
-  return { success: true, journalEntryId: mockJournalEntryId }
+  return {
+    success: true,
+    journalEntryId: result.entryId,
+    platform: integration.platform,
+  }
+}
+
+/**
+ * Post a month's revenue recognition to QuickBooks (DEPRECATED)
+ *
+ * @deprecated Use postMonthToAccounting() instead
+ *
+ * This is kept for backward compatibility with existing UI components.
+ * It's a simple wrapper around postMonthToAccounting().
+ */
+export async function postMonthToQuickBooks(
+  organizationId: string,
+  month: string
+): Promise<PostToQuickBooksResult> {
+  // Wrapper for backward compatibility - delegates to platform-agnostic function
+  return await postMonthToAccounting(organizationId, month)
 }
 
 /**
