@@ -8,7 +8,6 @@
 
 import { format, parseISO } from 'date-fns'
 import { Upload, CheckCircle2 } from 'lucide-react'
-import { Card } from '@/components/ui/card'
 
 interface ActivityFeedItemProps {
   type: 'import' | 'post'
@@ -50,7 +49,7 @@ export function ActivityFeedItem({
   }
 
   return (
-    <Card className="p-4 hover:border-gray-300">
+    <div className="py-4 hover:bg-gray-50 transition-colors rounded-md px-2">
       <div className="flex gap-3">
         {/* Icon */}
         <div className="flex-shrink-0">
@@ -111,6 +110,6 @@ export function ActivityFeedItem({
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }

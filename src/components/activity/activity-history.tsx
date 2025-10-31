@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Clock } from 'lucide-react'
 import { getActivityFeed } from '@/app/(dashboard)/[organizationId]/actions'
 import { ActivityFeedItem } from './activity-feed-item'
+import { Separator } from '@/components/ui/separator'
 
 interface ActivityHistoryProps {
   organizationId: string
@@ -97,15 +98,17 @@ export function ActivityHistory({ organizationId }: ActivityHistoryProps) {
         </span>
       </div>
 
-      <div className="space-y-3">
-        {activities.map((activity) => (
-          <ActivityFeedItem
-            key={activity.id}
-            type={activity.type}
-            createdAt={activity.created_at}
-            userName={activity.user_name}
-            metadata={activity.metadata}
-          />
+      <div>
+        {activities.map((activity, index) => (
+          <div key={activity.id}>
+            <ActivityFeedItem
+              type={activity.type}
+              createdAt={activity.created_at}
+              userName={activity.user_name}
+              metadata={activity.metadata}
+            />
+            {index < activities.length - 1 && <Separator />}
+          </div>
         ))}
       </div>
     </div>

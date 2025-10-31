@@ -10,6 +10,12 @@
 import { useMemo, useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Check, X } from 'lucide-react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  type ColumnDef,
+} from '@tanstack/react-table'
 import { PostConfirmationDialog } from './post-confirmation-dialog'
 import { postMonthToQuickBooks } from '@/app/(dashboard)/[organizationId]/actions'
 import { useRouter } from 'next/navigation'
@@ -121,6 +127,74 @@ export function WaterfallTable({
     return totals
   }, [months, schedules])
 
+  // Define columns for TanStack Table
+  const columns = useMemo<ColumnDef<Contract>[]>(() => {
+    const fixedColumns: ColumnDef<Contract>[] = [
+      {
+        accessorKey: 'invoice_id',
+        header: 'Invoice ID',
+        cell: ({ row }) => (
+          <div className="font-medium text-gray-900">{row.original.invoice_id}</div>
+        ),
+      },
+      {
+        accessorKey: 'customer_name',
+        header: 'Customer',
+        cell: ({ row }) => (
+          <div className="text-gray-700">{row.original.customer_name || '—'}</div>
+        ),
+      },
+      {
+        accessorKey: 'contract_amount',
+        header: () => <div className="text-right">Contract Amount</div>,
+        cell: ({ row }) => (
+          <div className="text-right text-gray-900">
+            {formatCurrency(row.original.contract_amount)}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'term_months',
+        header: () => <div className="text-center">Term</div>,
+        cell: ({ row }) => (
+          <div className="text-center text-gray-700">{row.original.term_months}mo</div>
+        ),
+      },
+    ]
+
+    // Add dynamic month columns
+    const monthColumns: ColumnDef<Contract>[] = months.map((month) => ({
+      id: month,
+      header: () => {
+        const isPosted = monthPostingStatus.get(month)
+        return (
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+            <span>{formatMonth(month)}</span>
+            {isPosted && <Check className="h-4 w-4 text-green-600" />}
+          </div>
+        )
+      },
+      cell: ({ row }) => {
+        const key = `${row.original.id}-${month}`
+        const amount = scheduleMap.get(key)
+        return (
+          <div className="text-right text-gray-900">
+            {amount ? formatCurrency(amount) : '—'}
+          </div>
+        )
+      },
+    }))
+
+    return [...fixedColumns, ...monthColumns]
+  }, [months, monthPostingStatus, scheduleMap])
+
+  // Initialize TanStack Table
+  const table = useReactTable({
+    data: contracts,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  })
+
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -184,72 +258,46 @@ export function WaterfallTable({
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              {/* Fixed columns */}
-              <TableHead className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Invoice ID
-              </TableHead>
-              <TableHead className="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Customer
-              </TableHead>
-              <TableHead className="bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                Contract Amount
-              </TableHead>
-              <TableHead className="bg-gray-50 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                Term
-              </TableHead>
-
-              {/* Dynamic month columns */}
-              {months.map((month) => {
-                const isPosted = monthPostingStatus.get(month)
-                return (
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header, index) => (
                   <TableHead
-                    key={month}
-                    className="whitespace-nowrap bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"
+                    key={header.id}
+                    className={`px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 ${
+                      index === 0
+                        ? 'sticky left-0 z-10 bg-gray-50'
+                        : 'bg-gray-50'
+                    } ${
+                      index >= 2 ? 'text-right' : 'text-left'
+                    }`}
                   >
-                    <div className="flex items-center justify-end gap-1.5">
-                      <span>{formatMonth(month)}</span>
-                      {isPosted && (
-                        <Check className="h-4 w-4 text-green-600" />
-                      )}
-                    </div>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                   </TableHead>
-                )
-              })}
-            </TableRow>
+                ))}
+              </TableRow>
+            ))}
           </TableHeader>
 
           <TableBody>
-            {contracts.map((contract) => (
-              <TableRow key={contract.id}>
-                {/* Fixed columns */}
-                <TableCell className="sticky left-0 z-10 bg-white whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 group-hover:bg-gray-50">
-                  {contract.invoice_id}
-                </TableCell>
-                <TableCell className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
-                  {contract.customer_name || '—'}
-                </TableCell>
-                <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
-                  {formatCurrency(contract.contract_amount)}
-                </TableCell>
-                <TableCell className="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-700">
-                  {contract.term_months}mo
-                </TableCell>
-
-                {/* Dynamic month columns */}
-                {months.map((month) => {
-                  const key = `${contract.id}-${month}`
-                  const amount = scheduleMap.get(key)
-
-                  return (
-                    <TableCell
-                      key={month}
-                      className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
-                    >
-                      {amount ? formatCurrency(amount) : '—'}
-                    </TableCell>
-                  )
-                })}
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell, index) => (
+                  <TableCell
+                    key={cell.id}
+                    className={`whitespace-nowrap px-4 py-4 text-sm ${
+                      index === 0
+                        ? 'sticky left-0 z-10 bg-white group-hover:bg-gray-50'
+                        : ''
+                    }`}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
               </TableRow>
             ))}
 
