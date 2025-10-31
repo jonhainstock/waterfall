@@ -44,20 +44,31 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protected routes
-  if (request.nextUrl.pathname.startsWith('/dashboard') ||
-      request.nextUrl.pathname.startsWith('/account')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+  // Root route handling
+  if (request.nextUrl.pathname === '/') {
+    // Note: Actual redirect logic is in app/page.tsx (Server Component)
+    // Middleware just ensures session is refreshed
+    return response
   }
 
-  // Auth routes (redirect if already logged in)
-  if (request.nextUrl.pathname.startsWith('/login') ||
-      request.nextUrl.pathname.startsWith('/signup')) {
-    if (user) {
+  // Public routes (allow without auth)
+  const publicRoutes = ['/login', '/signup', '/forgot-password', '/reset-password']
+  const isPublicRoute = publicRoutes.some(route =>
+    request.nextUrl.pathname.startsWith(route)
+  ) || request.nextUrl.pathname.startsWith('/accept-invitation/')
+
+  if (isPublicRoute) {
+    // If already authenticated, redirect away from auth pages
+    if (user && (request.nextUrl.pathname === '/login' ||
+                 request.nextUrl.pathname === '/signup')) {
       return NextResponse.redirect(new URL('/account/organizations', request.url))
     }
+    return response
+  }
+
+  // Protected routes (require authentication)
+  if (!user) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
   return response

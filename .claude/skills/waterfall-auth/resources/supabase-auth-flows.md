@@ -7,7 +7,7 @@ Complete authentication flows for Waterfall using Supabase Auth.
 ### Frontend Form
 
 ```typescript
-// app/(auth)/signup/page.tsx
+// app/signup/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
 ### Frontend Form
 
 ```typescript
-// app/(auth)/login/page.tsx
+// app/login/page.tsx
 'use client'
 
 import { useState } from 'react'

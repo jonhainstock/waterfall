@@ -14,6 +14,46 @@ Waterfall is a multi-tenant SaaS application that automates deferred revenue rec
 3. Visualize waterfall schedules
 4. Post journal entries to QuickBooks with one click
 
+## Repository Scope & Boundaries
+
+**CRITICAL:** This repository is the **Waterfall Application** ONLY.
+
+### What This Repo Contains
+
+✅ **Application Code:**
+- User authentication (Supabase)
+- Login/signup flows
+- Application routes (dashboard, contracts, schedules, etc.)
+- QuickBooks integration
+- Team/account management
+- Business logic and calculations
+
+### What This Repo Does NOT Contain
+
+❌ **Marketing Materials:**
+- Marketing website/landing page
+- Public-facing content (pricing, features, testimonials)
+- Blog or documentation site
+- About us, contact forms, etc.
+
+**The marketing site lives in a separate repository and is deployed separately.**
+
+### Root Route Behavior
+
+The root route (`/`) in THIS repo serves the **application entry point**:
+
+```typescript
+// app/page.tsx behavior:
+if (user is authenticated) {
+  → Redirect to first organization dashboard
+  → Or redirect to /account/organizations if no orgs
+} else {
+  → Show login/signup landing
+}
+```
+
+**NO marketing content** (hero sections, pricing tables, feature grids) should be in this repo.
+
 ## Tech Stack
 
 - **Frontend:** Next.js 16 (App Router), React 18, TypeScript
@@ -81,41 +121,77 @@ Account (Billing Entity)
 
 ```
 app/
-├── (auth)/              # Authentication routes
-├── (dashboard)/         # Main application
-│   ├── [organizationId]/   # Organization context
-│   │   ├── dashboard/
-│   │   ├── contracts/
-│   │   ├── schedule/
-│   │   └── quickbooks/
-│   └── account/         # Account-level (no org context)
-│       ├── organizations/
-│       ├── team/
-│       ├── settings/
-│       └── billing/
-├── api/                 # API routes
-└── layout.tsx
+├── page.tsx                    # Root: auth check + redirect logic
+├── login/page.tsx              # Login form (unauthenticated)
+├── signup/page.tsx             # Signup form (unauthenticated)
+├── forgot-password/page.tsx    # Password reset (unauthenticated)
+├── accept-invitation/          # Team invitation (unauthenticated)
+│   └── [token]/page.tsx
+├── [organizationId]/           # Org-scoped routes (authenticated)
+│   ├── dashboard/page.tsx
+│   ├── contracts/
+│   │   ├── page.tsx            # Contract list
+│   │   ├── new/page.tsx
+│   │   ├── import/page.tsx
+│   │   └── [id]/
+│   │       ├── page.tsx        # Contract detail
+│   │       └── edit/page.tsx
+│   ├── schedule/page.tsx       # Waterfall view
+│   ├── quickbooks/
+│   │   ├── connect/page.tsx
+│   │   └── settings/page.tsx
+│   └── settings/page.tsx
+├── account/                    # Account-level routes (authenticated)
+│   ├── organizations/
+│   │   ├── page.tsx
+│   │   └── new/page.tsx
+│   ├── team/
+│   │   ├── page.tsx
+│   │   └── invite/page.tsx
+│   ├── settings/page.tsx
+│   └── billing/page.tsx
+├── api/                        # API routes
+│   ├── auth/
+│   ├── organizations/
+│   └── account/
+└── layout.tsx                  # Root layout
 
 components/
-├── ui/                  # shadcn/ui components
-├── layout/              # Navigation, headers
-├── contracts/           # Contract components
-├── schedule/            # Waterfall components
-├── quickbooks/          # QB integration components
-└── auth/                # Auth forms
+├── ui/                         # shadcn/ui components
+├── auth/                       # Login/signup forms
+├── layout/                     # Navigation, headers, org-switcher
+├── contracts/                  # Contract components
+├── schedule/                   # Waterfall components
+└── quickbooks/                 # QB integration components
 
 lib/
-├── supabase/            # Supabase clients
-├── auth/                # Permission helpers
-├── quickbooks/          # QB API wrapper
-├── calculations/        # Revenue recognition logic
-├── import/              # CSV/Excel parsing
-├── db.ts                # Prisma client
+├── supabase/                   # Supabase clients (server/browser)
+├── auth/                       # Permission helpers
+├── quickbooks/                 # QB API wrapper
+├── calculations/               # Revenue recognition logic
+├── import/                     # CSV/Excel parsing
+├── db.ts                       # Prisma client
 └── utils.ts
 
 prisma/
-└── schema.prisma        # Database schema
+└── schema.prisma               # Database schema
 ```
+
+### Routing Philosophy
+
+**Flat Auth Routes (No Route Groups):**
+- We use **flat routes** (`/login`, `/signup`) instead of route groups (`/(auth)/login`)
+- **Why?** Simpler mental model, matches middleware expectations, clearer URLs
+
+**Root Route Pattern:**
+- Root (`/`) checks authentication status
+- Authenticated users → Redirect to dashboard or organizations
+- Unauthenticated users → Show login/signup options
+
+**Route Protection:**
+- Middleware protects all routes except: `/`, `/login`, `/signup`, `/forgot-password`, `/accept-invitation/*`
+- Unauthenticated requests to protected routes → Redirect to `/login`
+- Authenticated requests to auth routes → Redirect to dashboard
 
 ## Skill Navigation
 

@@ -32,6 +32,48 @@ All technical patterns are in **Skills** (auto-activate based on context):
 
 ---
 
+## Application vs Marketing Site
+
+**IMPORTANT:** This repository contains ONLY the application code.
+
+### Separation of Concerns
+
+- **This Repo (Waterfall App):**
+  - Authenticated user flows
+  - Login/signup (unauthenticated entry points)
+  - Dashboard, contracts, schedules
+  - QuickBooks integration
+  - Team management
+  - Deployed to: app.waterfallhq.com (example)
+
+- **Separate Repo (Marketing Site):**
+  - Public landing page
+  - Pricing page
+  - About, features, testimonials
+  - Blog (if needed)
+  - Deployed to: waterfallhq.com (example)
+
+### Root Route Behavior
+
+The root route (`/`) in THIS repo serves the **application entry point**:
+
+- **Unauthenticated users** → Show login/signup options
+- **Authenticated users** → Redirect to dashboard or organizations
+
+NO marketing content lives in this repository. All public-facing marketing materials are in a separate codebase.
+
+### Authentication with Supabase
+
+This application uses **Supabase Authentication** for:
+- User signup and login
+- Session management
+- Password reset flows
+- Team invitation acceptance
+
+All auth flows are handled through Supabase client libraries (`@supabase/supabase-js` and `@supabase/ssr`).
+
+---
+
 ## Project Commands
 
 ### Development
@@ -400,29 +442,51 @@ const contracts = await prisma.contract.findMany({
 
 ```
 app/
-├── (auth)/              # Login, signup
-├── (dashboard)/
-│   ├── [organizationId]/    # Org-scoped routes
-│   └── account/             # Account-level routes
-└── api/                 # API routes
+├── page.tsx                      # Root: redirects authenticated users, shows login for others
+├── login/page.tsx                # Login form
+├── signup/page.tsx               # Signup form
+├── forgot-password/page.tsx      # Password reset request
+├── accept-invitation/
+│   └── [token]/page.tsx          # Team invitation acceptance
+├── [organizationId]/             # Org-scoped routes (authenticated)
+│   ├── dashboard/
+│   ├── contracts/
+│   ├── schedule/
+│   ├── quickbooks/
+│   └── settings/
+├── account/                      # Account-level routes (authenticated)
+│   ├── organizations/
+│   ├── team/
+│   ├── settings/
+│   └── billing/
+└── api/                          # API routes
 
 components/
-├── ui/                  # shadcn/ui components
-├── contracts/           # Contract features
-├── schedule/            # Waterfall views
-└── quickbooks/          # QB integration
+├── ui/                           # shadcn/ui components
+├── auth/                         # Login/signup forms
+├── layout/                       # Header, sidebar, org-switcher
+├── contracts/                    # Contract features
+├── schedule/                     # Waterfall views
+└── quickbooks/                   # QB integration
 
 lib/
-├── supabase/            # Server/client/admin clients
-├── auth/                # Permission helpers
-├── quickbooks/          # QB OAuth & API
-├── calculations/        # Revenue recognition
-├── import/              # CSV/Excel parsing
-└── db.ts                # Prisma client
+├── supabase/                     # Server/client/admin clients
+├── auth/                         # Permission helpers
+├── quickbooks/                   # QB OAuth & API
+├── calculations/                 # Revenue recognition
+├── import/                       # CSV/Excel parsing
+└── db.ts                         # Prisma client
 
 prisma/
-└── schema.prisma        # Database schema
+└── schema.prisma                 # Database schema
 ```
+
+**Route Strategy:**
+- **Flat auth routes** (`/login`, `/signup`) - no route groups for simplicity
+- **Root route** (`/`) - checks auth and redirects or shows login
+- **Org routes** (`/[organizationId]/*`) - require authentication
+- **Account routes** (`/account/*`) - require authentication
+- **Middleware** protects all routes except root and auth routes
 
 ---
 
