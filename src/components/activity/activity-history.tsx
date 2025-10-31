@@ -79,7 +79,7 @@ export function ActivityHistory({ organizationId }: ActivityHistoryProps) {
     return (
       <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center">
         <Clock className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-4 text-lg font-medium text-gray-900">
+        <h3 className="mt-4 text-base font-medium text-gray-900">
           No activity yet
         </h3>
         <p className="mt-2 text-sm text-gray-500">
@@ -92,7 +92,7 @@ export function ActivityHistory({ organizationId }: ActivityHistoryProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Activity History</h2>
+        <h2 className="text-base font-semibold text-gray-900">Activity History</h2>
         <span className="text-sm text-gray-500">
           {activities.length} {activities.length === 1 ? 'entry' : 'entries'}
         </span>

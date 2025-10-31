@@ -71,7 +71,7 @@ export function ActivityFeedItem({
               <h3 className="text-sm font-medium text-gray-900">
                 Import Completed
               </h3>
-              <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+              <div className="mt-1 flex items-center gap-2 text-sm text-gray-600 tabular-nums">
                 {metadata.succeeded !== undefined && metadata.succeeded > 0 && (
                   <span className="text-green-600">
                     {metadata.succeeded} imported
@@ -92,7 +92,7 @@ export function ActivityFeedItem({
               <h3 className="text-sm font-medium text-gray-900">
                 Posted to QuickBooks
               </h3>
-              <div className="mt-1 text-sm text-gray-600">
+              <div className="mt-1 text-sm text-gray-600 tabular-nums">
                 {metadata.month && formatMonth(metadata.month)} •{' '}
                 {metadata.amount && formatCurrency(metadata.amount)}
                 {metadata.journal_entry_id && (

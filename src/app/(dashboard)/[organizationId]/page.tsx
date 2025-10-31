@@ -99,7 +99,7 @@ export default async function OrganizationPage({
       {/* Header */}
       <div className="sm:flex sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-gray-900">
             {organization.name}
           </h1>
           <p className="mt-1 text-sm text-gray-500">

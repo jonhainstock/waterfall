@@ -254,7 +254,7 @@ export function WaterfallTable({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>

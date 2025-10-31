@@ -60,7 +60,7 @@ export default async function OrganizationsPage() {
         {/* Header */}
         <div className="sm:flex sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
+            <h1 className="text-gray-900">Organizations</h1>
             <p className="mt-1 text-sm text-gray-500">
               Manage your client organizations
             </p>
@@ -81,7 +81,7 @@ export default async function OrganizationsPage() {
         <div className="mt-8">
           {!organizations || organizations.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 className="text-gray-900">
                 No organizations yet
               </h3>
               <p className="mt-1 text-sm text-gray-500">
@@ -110,7 +110,7 @@ export default async function OrganizationsPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-medium text-gray-900 group-hover:text-blue-600">
+                      <h3 className="text-gray-900 group-hover:text-blue-600">
                         {org.name}
                       </h3>
                       <p className="mt-1 text-sm text-gray-500">
