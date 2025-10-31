@@ -71,8 +71,10 @@ desktop.ini
 .claude/hooks/.edit-log.json
 .claude/**/*.log
 
-# Prisma
-prisma/migrations/**/*.sql.bak
+# Supabase
+.supabase/
+supabase/.branches/
+supabase/.temp/
 
 # Temporary files
 *.tmp
