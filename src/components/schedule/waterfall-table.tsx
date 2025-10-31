@@ -9,9 +9,19 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
+import { Check, X } from 'lucide-react'
 import { PostConfirmationDialog } from './post-confirmation-dialog'
 import { postMonthToQuickBooks } from '@/app/(dashboard)/[organizationId]/actions'
 import { useRouter } from 'next/navigation'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
 
 interface Contract {
   id: string
@@ -172,71 +182,59 @@ export function WaterfallTable({
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
+        <Table>
+          <TableHeader>
+            <TableRow>
               {/* Fixed columns */}
-              <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <TableHead className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                 Invoice ID
-              </th>
-              <th className="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              </TableHead>
+              <TableHead className="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                 Customer
-              </th>
-              <th className="bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              </TableHead>
+              <TableHead className="bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                 Contract Amount
-              </th>
-              <th className="bg-gray-50 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+              </TableHead>
+              <TableHead className="bg-gray-50 px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
                 Term
-              </th>
+              </TableHead>
 
               {/* Dynamic month columns */}
               {months.map((month) => {
                 const isPosted = monthPostingStatus.get(month)
                 return (
-                  <th
+                  <TableHead
                     key={month}
                     className="whitespace-nowrap bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       <span>{formatMonth(month)}</span>
                       {isPosted && (
-                        <svg
-                          className="h-4 w-4 text-green-600"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
+                        <Check className="h-4 w-4 text-green-600" />
                       )}
                     </div>
-                  </th>
+                  </TableHead>
                 )
               })}
-            </tr>
-          </thead>
+            </TableRow>
+          </TableHeader>
 
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <TableBody>
             {contracts.map((contract) => (
-              <tr key={contract.id} className="hover:bg-gray-50">
+              <TableRow key={contract.id}>
                 {/* Fixed columns */}
-                <td className="sticky left-0 z-10 bg-white whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 group-hover:bg-gray-50">
+                <TableCell className="sticky left-0 z-10 bg-white whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 group-hover:bg-gray-50">
                   {contract.invoice_id}
-                </td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                </TableCell>
+                <TableCell className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
                   {contract.customer_name || '—'}
-                </td>
-                <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
+                </TableCell>
+                <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                   {formatCurrency(contract.contract_amount)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-700">
+                </TableCell>
+                <TableCell className="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-700">
                   {contract.term_months}mo
-                </td>
+                </TableCell>
 
                 {/* Dynamic month columns */}
                 {months.map((month) => {
@@ -244,55 +242,55 @@ export function WaterfallTable({
                   const amount = scheduleMap.get(key)
 
                   return (
-                    <td
+                    <TableCell
                       key={month}
                       className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
                     >
                       {amount ? formatCurrency(amount) : '—'}
-                    </td>
+                    </TableCell>
                   )
                 })}
-              </tr>
+              </TableRow>
             ))}
 
             {/* Totals row */}
-            <tr className="bg-gray-100 font-semibold">
-              <td
+            <TableRow className="bg-gray-100 font-semibold">
+              <TableCell
                 className="sticky left-0 z-10 bg-gray-100 whitespace-nowrap px-4 py-4 text-sm text-gray-900"
                 colSpan={2}
               >
                 TOTAL
-              </td>
-              <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
+              </TableCell>
+              <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                 {formatCurrency(
                   contracts.reduce(
                     (sum, c) => sum + c.contract_amount,
                     0
                   )
                 )}
-              </td>
-              <td className="whitespace-nowrap px-4 py-4"></td>
+              </TableCell>
+              <TableCell className="whitespace-nowrap px-4 py-4"></TableCell>
 
               {/* Monthly totals */}
               {months.map((month) => (
-                <td
+                <TableCell
                   key={month}
                   className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
                 >
                   {formatCurrency(monthlyTotals.get(month) || 0)}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
 
             {/* Actions row - Post to QuickBooks */}
             {(canPostToQuickBooks || qbConnected) && (
-              <tr className="bg-gray-50">
-                <td
+              <TableRow className="bg-gray-50">
+                <TableCell
                   className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
                   colSpan={4}
                 >
                   QuickBooks
-                </td>
+                </TableCell>
 
                 {/* Post buttons for each month */}
                 {months.map((month) => {
@@ -300,36 +298,25 @@ export function WaterfallTable({
                   const monthTotal = monthlyTotals.get(month) || 0
 
                   return (
-                    <td
+                    <TableCell
                       key={month}
                       className="whitespace-nowrap px-4 py-3 text-right"
                     >
                       {isPosted ? (
                         <div className="flex items-center justify-end gap-1.5 text-xs text-green-600">
-                          <svg
-                            className="h-3.5 w-3.5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
+                          <Check className="h-3.5 w-3.5" />
                           <span>Posted</span>
                         </div>
                       ) : effectiveCanPost ? (
-                        <button
+                        <Button
                           onClick={() => handlePostClick(month)}
-                          className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          size="sm"
                           disabled={monthTotal === 0}
                           title={monthTotal === 0 ? 'No revenue to post' : 'Post to QuickBooks'}
+                          className="h-7 px-3 text-xs"
                         >
                           Post
-                        </button>
+                        </Button>
                       ) : !qbConnected ? (
                         <span className="text-xs text-gray-400" title="Connect QuickBooks first">
                           —
@@ -341,13 +328,13 @@ export function WaterfallTable({
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}
-                    </td>
+                    </TableCell>
                   )
                 })}
-              </tr>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Summary stats */}
@@ -367,37 +354,13 @@ export function WaterfallTable({
       {success && (
         <div className="border-t border-green-200 bg-green-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-green-800">
-            <svg
-              className="h-5 w-5 text-green-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <Check className="h-5 w-5 text-green-600" />
             <span>{success}</span>
             <button
               onClick={() => setSuccess(null)}
               className="ml-auto text-green-600 hover:text-green-700"
             >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -407,37 +370,13 @@ export function WaterfallTable({
       {error && (
         <div className="border-t border-red-200 bg-red-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-red-800">
-            <svg
-              className="h-5 w-5 text-red-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="h-5 w-5 text-red-600" />
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
               className="ml-auto text-red-600 hover:text-red-700"
             >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>

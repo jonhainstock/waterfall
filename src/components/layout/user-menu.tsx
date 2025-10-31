@@ -9,6 +9,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 interface UserMenuProps {
   user: {
@@ -19,12 +28,10 @@ interface UserMenuProps {
 
 export function UserMenu({ user }: UserMenuProps) {
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
   async function handleSignOut() {
     setSigningOut(true)
-    setIsOpen(false)
 
     try {
       const response = await fetch('/api/auth/logout', {
@@ -53,63 +60,49 @@ export function UserMenu({ user }: UserMenuProps) {
     .slice(0, 2)
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-full hover:opacity-80"
-      >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white">
-          {initials}
-        </div>
-      </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 rounded-full hover:opacity-80">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-blue-600 text-xs font-medium text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
 
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
+      <DropdownMenuContent align="end" className="w-64">
+        {/* User Info */}
+        <DropdownMenuLabel>
+          <p className="text-sm font-medium text-gray-900">{user.name}</p>
+          <p className="text-xs font-normal text-gray-500">{user.email}</p>
+        </DropdownMenuLabel>
 
-          {/* Dropdown */}
-          <div className="absolute right-0 z-20 mt-2 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
-            {/* User Info */}
-            <div className="border-b border-gray-200 px-4 py-3">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{user.email}</p>
-            </div>
+        <DropdownMenuSeparator />
 
-            {/* Menu Items */}
-            <div className="py-1">
-              <Link
-                href="/account/organizations"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                onClick={() => setIsOpen(false)}
-              >
-                Organizations
-              </Link>
-              <Link
-                href="/account/settings"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                onClick={() => setIsOpen(false)}
-              >
-                Account Settings
-              </Link>
-            </div>
+        {/* Menu Items */}
+        <DropdownMenuItem asChild>
+          <Link href="/account/organizations" className="cursor-pointer">
+            Organizations
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account/settings" className="cursor-pointer">
+            Account Settings
+          </Link>
+        </DropdownMenuItem>
 
-            {/* Sign Out */}
-            <div className="border-t border-gray-200">
-              <button
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 disabled:opacity-50"
-              >
-                {signingOut ? 'Signing out...' : 'Sign out'}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+        <DropdownMenuSeparator />
+
+        {/* Sign Out */}
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="text-red-600"
+        >
+          {signingOut ? 'Signing out...' : 'Sign out'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

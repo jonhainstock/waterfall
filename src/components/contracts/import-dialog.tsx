@@ -10,7 +10,21 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
-import { importContracts } from '@/app/(dashboard)/[organizationId]/actions'
+import { Loader2 } from 'lucide-react'
+import {
+  importContracts,
+  checkDuplicateContracts,
+} from '@/app/(dashboard)/[organizationId]/actions'
+import { DuplicateConfirmationDialog } from './duplicate-confirmation-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 interface ImportDialogProps {
   organizationId: string
@@ -28,6 +42,12 @@ interface ContractRow {
   term_months?: string
 }
 
+interface DuplicateContract {
+  invoice_id: string
+  created_at: string
+  contract_amount: number
+}
+
 export function ImportDialog({
   organizationId,
   isOpen,
@@ -39,8 +59,9 @@ export function ImportDialog({
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
-  if (!isOpen) return null
+  const [parsedContracts, setParsedContracts] = useState<ContractRow[]>([])
+  const [duplicates, setDuplicates] = useState<DuplicateContract[]>([])
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -51,6 +72,57 @@ export function ImportDialog({
     }
   }
 
+  // Step 2: Proceed with import (with optional skip list)
+  const proceedWithImport = async (
+    contracts: ContractRow[],
+    skipInvoiceIds: string[]
+  ) => {
+    setIsProcessing(true)
+
+    try {
+      const result = await importContracts(organizationId, contracts, skipInvoiceIds)
+
+      if (result.error) {
+        setError(result.error)
+      } else {
+        // Enhanced success message
+        const parts: string[] = []
+        if (result.succeeded > 0) {
+          parts.push(`${result.succeeded} contract${result.succeeded !== 1 ? 's' : ''} imported`)
+        }
+        if (result.skipped > 0) {
+          parts.push(`${result.skipped} duplicate${result.skipped !== 1 ? 's' : ''} skipped`)
+        }
+        if (result.failed > 0) {
+          parts.push(`${result.failed} failed`)
+        }
+
+        setSuccess(parts.join(', '))
+        setFile(null)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+
+        // Refresh the page to show new contracts
+        setTimeout(() => {
+          router.refresh()
+          onClose()
+        }, 2000)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import contracts')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Handle duplicate dialog confirmation
+  const handleDuplicateConfirm = async (skipInvoiceIds: string[]) => {
+    setShowDuplicateDialog(false)
+    await proceedWithImport(parsedContracts, skipInvoiceIds)
+  }
+
+  // Step 1: Parse and check for duplicates
   const handleImport = async () => {
     if (!file) {
       setError('Please select a file')
@@ -101,27 +173,28 @@ export function ImportDialog({
               throw new Error('CSV file contains no valid data')
             }
 
-            // Call server action
-            const result = await importContracts(organizationId, contracts)
+            // Store parsed contracts for later use
+            setParsedContracts(contracts)
 
-            if (result.error) {
-              setError(result.error)
+            // Check for duplicates
+            const invoiceIds = contracts.map((c) => c.invoice_id)
+            const duplicateCheck = await checkDuplicateContracts(
+              organizationId,
+              invoiceIds
+            )
+
+            if (duplicateCheck.error) {
+              throw new Error(duplicateCheck.error)
+            }
+
+            // If duplicates found, show confirmation dialog
+            if (duplicateCheck.duplicates.length > 0) {
+              setDuplicates(duplicateCheck.duplicates)
+              setShowDuplicateDialog(true)
+              setIsProcessing(false)
             } else {
-              setSuccess(
-                `Successfully imported ${result.succeeded} contract(s)${
-                  result.failed > 0 ? `. ${result.failed} failed.` : ''
-                }`
-              )
-              setFile(null)
-              if (fileInputRef.current) {
-                fileInputRef.current.value = ''
-              }
-
-              // Refresh the page to show new contracts
-              setTimeout(() => {
-                router.refresh()
-                onClose()
-              }, 1500)
+              // No duplicates, proceed with import
+              await proceedWithImport(contracts, [])
             }
           } catch (err) {
             setError(
@@ -144,62 +217,32 @@ export function ImportDialog({
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-50 bg-black/50"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Contracts</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file containing your contract data
+            </DialogDescription>
+          </DialogHeader>
 
-      {/* Dialog */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-md rounded-lg bg-white shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Import Contracts
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-500"
-              disabled={isProcessing}
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="px-6 py-4">
+          <div className="grid gap-4 py-4">
             {/* File Input */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className="grid gap-2">
+              <label htmlFor="file" className="text-sm font-medium">
                 CSV File
               </label>
               <input
+                id="file"
                 ref={fileInputRef}
                 type="file"
                 accept=".csv"
                 onChange={handleFileChange}
                 disabled={isProcessing}
-                className="mt-2 block w-full text-sm text-gray-900 file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
+                className="block w-full text-sm text-gray-900 file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
               />
               {file && (
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   Selected: {file.name}
                 </p>
               )}
@@ -221,63 +264,48 @@ export function ImportDialog({
 
             {/* Error Message */}
             {error && (
-              <div className="mt-4 rounded-md bg-red-50 p-4">
+              <div className="rounded-md bg-red-50 p-4">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div className="mt-4 rounded-md bg-green-50 p-4">
+              <div className="rounded-md bg-green-50 p-4">
                 <p className="text-sm text-green-700">{success}</p>
               </div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
-            <button
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
               disabled={isProcessing}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleImport}
               disabled={!file || isProcessing}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {isProcessing ? (
-                <>
-                  <svg
-                    className="h-4 w-4 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  Processing...
-                </>
-              ) : (
-                'Import'
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+              {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isProcessing ? 'Processing...' : 'Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Confirmation Dialog */}
+      <DuplicateConfirmationDialog
+        isOpen={showDuplicateDialog}
+        onClose={() => setShowDuplicateDialog(false)}
+        onConfirm={handleDuplicateConfirm}
+        duplicates={duplicates}
+        newContractsCount={parsedContracts.length - duplicates.length}
+        totalContractsCount={parsedContracts.length}
+      />
     </>
   )
 }

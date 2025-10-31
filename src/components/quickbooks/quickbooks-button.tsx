@@ -8,6 +8,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Check, Zap } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { QuickBooksConnectionDialog } from './quickbooks-connection-dialog'
 
 interface QuickBooksButtonProps {
@@ -31,50 +33,23 @@ export function QuickBooksButton({ organizationId }: QuickBooksButtonProps) {
 
   return (
     <>
-      <button
+      <Button
         onClick={() => setIsOpen(true)}
-        className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-          isConnected
-            ? 'bg-green-50 text-green-700 hover:bg-green-100 focus:ring-green-500 border border-green-200'
-            : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
-        }`}
+        variant={isConnected ? 'outline' : 'default'}
+        className={isConnected ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100' : ''}
       >
         {isConnected ? (
           <>
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <Check className="h-4 w-4" />
             QuickBooks
           </>
         ) : (
           <>
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
+            <Zap className="h-4 w-4" />
             Connect to QuickBooks
           </>
         )}
-      </button>
+      </Button>
 
       <QuickBooksConnectionDialog
         organizationId={organizationId}

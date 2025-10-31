@@ -31,13 +31,33 @@ interface ContractImport {
 interface ImportResult {
   succeeded: number
   failed: number
+  skipped: number
+  error?: string
+  duplicates?: string[]
+}
+
+interface DuplicateContract {
+  invoice_id: string
+  created_at: string
+  contract_amount: number
+}
+
+interface CheckDuplicatesResult {
+  duplicates: DuplicateContract[]
   error?: string
 }
 
-export async function importContracts(
+/**
+ * Check for duplicate contracts before importing
+ *
+ * @param organizationId Organization ID
+ * @param invoiceIds Array of invoice IDs to check
+ * @returns List of existing contracts with matching invoice_ids
+ */
+export async function checkDuplicateContracts(
   organizationId: string,
-  contracts: ContractImport[]
-): Promise<ImportResult> {
+  invoiceIds: string[]
+): Promise<CheckDuplicatesResult> {
   const supabase = await createClient()
 
   // Check authentication
@@ -46,7 +66,7 @@ export async function importContracts(
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { succeeded: 0, failed: 0, error: 'Not authenticated' }
+    return { duplicates: [], error: 'Not authenticated' }
   }
 
   // Verify user has access to this organization
@@ -58,14 +78,71 @@ export async function importContracts(
     .single()
 
   if (!org) {
-    return { succeeded: 0, failed: 0, error: 'Organization not found' }
+    return { duplicates: [], error: 'Organization not found' }
+  }
+
+  // Check for existing contracts with these invoice IDs
+  const { data: existingContracts, error } = await supabase
+    .from('contracts')
+    .select('invoice_id, created_at, contract_amount')
+    .eq('organization_id', organizationId)
+    .in('invoice_id', invoiceIds)
+
+  if (error) {
+    return { duplicates: [], error: `Failed to check duplicates: ${error.message}` }
+  }
+
+  return {
+    duplicates: (existingContracts || []).map((c) => ({
+      invoice_id: c.invoice_id,
+      created_at: c.created_at,
+      contract_amount: c.contract_amount,
+    })),
+  }
+}
+
+export async function importContracts(
+  organizationId: string,
+  contracts: ContractImport[],
+  skipInvoiceIds: string[] = []
+): Promise<ImportResult> {
+  const supabase = await createClient()
+
+  // Check authentication
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { succeeded: 0, failed: 0, skipped: 0, error: 'Not authenticated' }
+  }
+
+  // Verify user has access to this organization
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('id', organizationId)
+    .eq('is_active', true)
+    .single()
+
+  if (!org) {
+    return { succeeded: 0, failed: 0, skipped: 0, error: 'Organization not found' }
   }
 
   let succeeded = 0
   let failed = 0
+  let skipped = 0
   const errors: string[] = []
+  const duplicates: string[] = []
 
   for (const contractData of contracts) {
+    // Skip if this invoice_id is in the skipInvoiceIds list
+    if (skipInvoiceIds.includes(contractData.invoice_id)) {
+      skipped++
+      duplicates.push(contractData.invoice_id)
+      continue
+    }
+
     try {
       // Validate and parse data
       const amount = parseFloat(contractData.amount)
@@ -184,15 +261,44 @@ export async function importContracts(
   // Revalidate the organization page
   revalidatePath(`/${organizationId}`)
 
-  if (failed > 0 && succeeded === 0) {
+  if (failed > 0 && succeeded === 0 && skipped === 0) {
     return {
       succeeded,
       failed,
+      skipped,
       error: `All imports failed. First error: ${errors[0]}`,
     }
   }
 
-  return { succeeded, failed }
+  return {
+    succeeded,
+    failed,
+    skipped,
+    duplicates: duplicates.length > 0 ? duplicates : undefined,
+  }
+}
+
+interface ActivityFeedItem {
+  id: string
+  type: 'import' | 'post'
+  created_at: string
+  user_name: string | null
+  metadata: {
+    // For imports
+    succeeded?: number
+    failed?: number
+    skipped?: number
+    filename?: string
+    // For posts
+    month?: string
+    amount?: number
+    journal_entry_id?: string
+  }
+}
+
+interface ActivityFeedResult {
+  activities: ActivityFeedItem[]
+  error?: string
 }
 
 interface PostToQuickBooksResult {
@@ -285,4 +391,136 @@ export async function postMonthToQuickBooks(
   revalidatePath(`/${organizationId}`)
 
   return { success: true, journalEntryId: mockJournalEntryId }
+}
+
+/**
+ * Get activity feed for an organization
+ *
+ * Fetches recent imports and posts in chronological order
+ */
+export async function getActivityFeed(
+  organizationId: string
+): Promise<ActivityFeedResult> {
+  const supabase = await createClient()
+
+  // Check authentication
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { activities: [], error: 'Not authenticated' }
+  }
+
+  // Verify user has access to this organization
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('id', organizationId)
+    .eq('is_active', true)
+    .single()
+
+  if (!org) {
+    return { activities: [], error: 'Organization not found' }
+  }
+
+  // Fetch import logs
+  const { data: imports } = await supabase
+    .from('import_logs')
+    .select(
+      `
+      id,
+      created_at,
+      filename,
+      rows_succeeded,
+      rows_failed,
+      imported_by,
+      users:imported_by(name)
+    `
+    )
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  // Fetch posted schedules (grouped by month)
+  const { data: posts } = await supabase
+    .from('recognition_schedules')
+    .select(
+      `
+      id,
+      recognition_month,
+      recognition_amount,
+      journal_entry_id,
+      posted_at,
+      posted_by,
+      users:posted_by(name)
+    `
+    )
+    .eq('organization_id', organizationId)
+    .eq('posted', true)
+    .not('posted_at', 'is', null)
+    .order('posted_at', { ascending: false })
+    .limit(50)
+
+  // Combine and format activities
+  const activities: ActivityFeedItem[] = []
+
+  // Add imports
+  if (imports) {
+    imports.forEach((imp: any) => {
+      activities.push({
+        id: imp.id,
+        type: 'import',
+        created_at: imp.created_at,
+        user_name: imp.users?.name || null,
+        metadata: {
+          succeeded: imp.rows_succeeded,
+          failed: imp.rows_failed,
+          filename: imp.filename,
+        },
+      })
+    })
+  }
+
+  // Add posts (group by month to avoid duplicates)
+  const postedMonths = new Map<string, any>()
+  if (posts) {
+    posts.forEach((post: any) => {
+      const month = post.recognition_month
+      if (!postedMonths.has(month)) {
+        postedMonths.set(month, {
+          id: post.id,
+          posted_at: post.posted_at,
+          user_name: post.users?.name || null,
+          amount: post.recognition_amount,
+          journal_entry_id: post.journal_entry_id,
+        })
+      } else {
+        // Sum up amounts for the same month
+        const existing = postedMonths.get(month)
+        existing.amount += post.recognition_amount
+      }
+    })
+
+    postedMonths.forEach((postData, month) => {
+      activities.push({
+        id: postData.id,
+        type: 'post',
+        created_at: postData.posted_at,
+        user_name: postData.user_name,
+        metadata: {
+          month,
+          amount: postData.amount,
+          journal_entry_id: postData.journal_entry_id,
+        },
+      })
+    })
+  }
+
+  // Sort by created_at descending
+  activities.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+
+  return { activities }
 }
