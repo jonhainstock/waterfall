@@ -201,9 +201,9 @@ export async function importContracts(
       }
 
       // Insert contract
-      const result: any = await supabase
+      const result = await supabase
         .from('contracts')
-        .insert(contractPayload as any)
+        .insert(contractPayload)
         .select('id')
         .single()
 
@@ -233,7 +233,7 @@ export async function importContracts(
 
       const { error: scheduleError } = await supabase
         .from('recognition_schedules')
-        .insert(scheduleEntries as any)
+        .insert(scheduleEntries)
 
       if (scheduleError) {
         // If schedule insert fails, delete the contract
@@ -259,7 +259,7 @@ export async function importContracts(
     rows_succeeded: succeeded,
     rows_failed: failed,
     error_details: failed > 0 ? { errors } : null,
-  } as any)
+  })
 
   // Revalidate the organization page
   revalidatePath(`/${organizationId}`)
@@ -386,7 +386,7 @@ export async function postMonthToQuickBooks(
       posted_at: new Date().toISOString(),
       posted_by: user.id,
       journal_entry_id: mockJournalEntryId,
-    } as any)
+    })
     .in('id', scheduleIds)
 
   if (updateError) {

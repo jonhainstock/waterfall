@@ -63,7 +63,7 @@ export async function canAccessOrganization(
 ): Promise<boolean> {
   const supabase = await createClient()
 
-  const result: any = await supabase
+  const result = await supabase
     .from('organizations')
     .select('account_id, account:accounts(account_users(user_id))')
     .eq('id', organizationId)
@@ -74,8 +74,12 @@ export async function canAccessOrganization(
   }
 
   // Check if user is part of the account that owns this organization
-  const accountUsers = (result.data.account as any)?.account_users || []
-  return accountUsers.some((au: any) => au.user_id === userId)
+  // Type assertion needed for nested Supabase relations
+  type AccountWithUsers = {
+    account_users: Array<{ user_id: string }>
+  }
+  const accountUsers = (result.data.account as unknown as AccountWithUsers | null)?.account_users || []
+  return accountUsers.some((au) => au.user_id === userId)
 }
 
 /**
@@ -91,7 +95,7 @@ export async function getUserRole(
 ): Promise<string | null> {
   const supabase = await createClient()
 
-  const result: any = await supabase
+  const result = await supabase
     .from('organizations')
     .select('account_id, account:accounts(account_users(user_id, role))')
     .eq('id', organizationId)
@@ -101,8 +105,12 @@ export async function getUserRole(
     return null
   }
 
-  const accountUsers = (result.data.account as any)?.account_users || []
-  const userAccount = accountUsers.find((au: any) => au.user_id === userId)
+  // Type assertion needed for nested Supabase relations
+  type AccountWithUsersAndRoles = {
+    account_users: Array<{ user_id: string; role: string }>
+  }
+  const accountUsers = (result.data.account as unknown as AccountWithUsersAndRoles | null)?.account_users || []
+  const userAccount = accountUsers.find((au) => au.user_id === userId)
 
   return userAccount?.role || null
 }

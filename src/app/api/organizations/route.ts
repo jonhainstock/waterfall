@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     }
 
     // Check user has permission (owner or admin role)
-    const membershipResult: any = await supabase
+    const membershipResult = await supabase
       .from('account_users')
       .select('role')
       .eq('account_id', accountId)
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
         account_id: accountId,
         name,
         is_active: true,
-      } as any)
+      })
       .select()
       .single()
 

@@ -66,13 +66,13 @@ export async function POST(request: Request) {
     const userId = authData.user.id
 
     // 2. Create User record
-    const userResult: any = await supabase
+    const userResult = await supabase
       .from('users')
       .insert({
         id: userId,
         email,
         name,
-      } as any)
+      })
       .select()
       .single()
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     const user = userResult.data
 
     // 3. Create Account
-    const accountResult: any = await supabase
+    const accountResult = await supabase
       .from('accounts')
       .insert({
         name: companyName,
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         trial_ends_at: new Date(
           Date.now() + 14 * 24 * 60 * 60 * 1000
         ).toISOString(), // 14 days from now
-      } as any)
+      })
       .select()
       .single()
 
@@ -120,13 +120,13 @@ export async function POST(request: Request) {
     const organizationName =
       accountType === 'company' ? companyName : 'Example Client'
 
-    const orgResult: any = await supabase
+    const orgResult = await supabase
       .from('organizations')
       .insert({
         account_id: account.id,
         name: organizationName,
         is_active: true,
-      } as any)
+      })
       .select()
       .single()
 
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         account_id: account.id,
         user_id: userId,
         role: 'owner',
-      } as any)
+      })
 
     if (membershipError) {
       console.error('Account membership creation error:', membershipError)
