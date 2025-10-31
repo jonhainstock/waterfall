@@ -1,0 +1,227 @@
+{
+  "waterfall-overview": {
+    "type": "navigation",
+    "enforcement": "suggest",
+    "priority": "high",
+    "promptTriggers": {
+      "keywords": [
+        "overview",
+        "architecture",
+        "how does waterfall work",
+        "project structure",
+        "what is waterfall",
+        "explain the project"
+      ],
+      "intentPatterns": [
+        "(what is|explain|describe).*?(waterfall|project|architecture|system)",
+        "how does.*?work",
+        "project overview"
+      ]
+    }
+  },
+  "waterfall-data-model": {
+    "type": "domain",
+    "enforcement": "suggest",
+    "priority": "high",
+    "promptTriggers": {
+      "keywords": [
+        "database",
+        "schema",
+        "prisma",
+        "supabase",
+        "RLS",
+        "row level security",
+        "multi-tenant",
+        "organization",
+        "account",
+        "contract",
+        "migration",
+        "table"
+      ],
+      "intentPatterns": [
+        "(create|add|modify|update).*?(table|model|schema|migration|database)",
+        "(how to|best practice).*?(database|prisma|RLS|supabase)",
+        "multi.?tenant.*?(data|access|security)"
+      ]
+    },
+    "fileTriggers": {
+      "pathPatterns": [
+        "prisma/**/*.prisma",
+        "prisma/migrations/**/*.sql",
+        "lib/db.ts",
+        "lib/supabase/**/*.ts"
+      ],
+      "contentPatterns": [
+        "prisma\\.",
+        "createClient",
+        "Row Level Security",
+        "@prisma/client",
+        "supabase"
+      ]
+    }
+  },
+  "waterfall-auth": {
+    "type": "domain",
+    "enforcement": "suggest",
+    "priority": "high",
+    "promptTriggers": {
+      "keywords": [
+        "auth",
+        "authentication",
+        "authorization",
+        "permissions",
+        "role",
+        "login",
+        "signup",
+        "sign up",
+        "sign in",
+        "logout",
+        "session",
+        "middleware",
+        "protect",
+        "team",
+        "invite"
+      ],
+      "intentPatterns": [
+        "(implement|add|fix).*?(auth|login|signup|permission|role)",
+        "(how to|best practice).*?(auth|security|permission)",
+        "(protect|secure).*?(route|page|api)",
+        "(check|verify).*?(permission|access|role)"
+      ]
+    },
+    "fileTriggers": {
+      "pathPatterns": [
+        "app/(auth)/**/*.tsx",
+        "lib/auth/**/*.ts",
+        "middleware.ts",
+        "app/api/auth/**/*.ts"
+      ],
+      "contentPatterns": [
+        "supabase\\.auth",
+        "hasPermission",
+        "getCurrentUser",
+        "canAccessOrganization",
+        "getUserRole"
+      ]
+    }
+  },
+  "waterfall-business-logic": {
+    "type": "domain",
+    "enforcement": "suggest",
+    "priority": "high",
+    "promptTriggers": {
+      "keywords": [
+        "revenue recognition",
+        "contract",
+        "import",
+        "CSV",
+        "Excel",
+        "quickbooks",
+        "QuickBooks",
+        "QB",
+        "journal entry",
+        "calculation",
+        "waterfall schedule",
+        "recognition schedule",
+        "monthly recognition",
+        "deferred revenue",
+        "OAuth",
+        "token"
+      ],
+      "intentPatterns": [
+        "(calculate|compute).*?(revenue|recognition|amount)",
+        "(import|upload|parse).*?(CSV|Excel|file|contract)",
+        "(post|create).*?(journal entry|JE)",
+        "quickbooks.*?(integration|oauth|connect|post)",
+        "(connect|integrate).*?quickbooks"
+      ]
+    },
+    "fileTriggers": {
+      "pathPatterns": [
+        "lib/calculations/**/*.ts",
+        "lib/import/**/*.ts",
+        "lib/quickbooks/**/*.ts",
+        "app/api/**/contracts/**/*.ts",
+        "app/api/**/quickbooks/**/*.ts"
+      ],
+      "contentPatterns": [
+        "Decimal\\.",
+        "papaparse",
+        "quickbooks",
+        "calculateRevenue",
+        "generateSchedule",
+        "OAuthClient",
+        "createJournalEntry"
+      ]
+    }
+  },
+  "waterfall-ui-patterns": {
+    "type": "domain",
+    "enforcement": "suggest",
+    "priority": "high",
+    "promptTriggers": {
+      "keywords": [
+        "component",
+        "form",
+        "table",
+        "shadcn",
+        "UI",
+        "frontend",
+        "react",
+        "client component",
+        "server component",
+        "tailwind",
+        "styling",
+        "dialog",
+        "toast",
+        "button"
+      ],
+      "intentPatterns": [
+        "(create|add|fix|build).*?(component|form|table|page|UI)",
+        "(how to|best practice).*?(react|UI|frontend|component)",
+        "(style|design).*?(component|page|form)",
+        "server.*?client.*?component"
+      ]
+    },
+    "fileTriggers": {
+      "pathPatterns": [
+        "app/**/*.tsx",
+        "components/**/*.tsx",
+        "app/**/page.tsx",
+        "app/**/layout.tsx"
+      ],
+      "contentPatterns": [
+        "'use client'",
+        "useForm",
+        "shadcn",
+        "useReactTable",
+        "@/components/ui",
+        "zodResolver"
+      ]
+    }
+  },
+  "skill-developer": {
+    "type": "meta",
+    "enforcement": "suggest",
+    "priority": "medium",
+    "promptTriggers": {
+      "keywords": [
+        "create skill",
+        "update skill",
+        "new skill",
+        "skill file",
+        "resource file"
+      ],
+      "intentPatterns": [
+        "(create|add|build).*?skill",
+        "(update|modify|edit).*?skill",
+        "how.*?create.*?skill"
+      ]
+    },
+    "fileTriggers": {
+      "pathPatterns": [
+        ".claude/skills/**/*.md"
+      ]
+    }
+  }
+}
