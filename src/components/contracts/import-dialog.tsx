@@ -70,13 +70,17 @@ export function ImportDialog({
           try {
             // Validate required fields
             const contracts = results.data.map((row, index) => {
-              if (!row.invoice_id || !row.amount || !row.start_date) {
+              if (!row.invoice_id?.trim() || !row.amount?.trim() || !row.start_date?.trim()) {
                 throw new Error(
                   `Row ${index + 1}: Missing required fields (invoice_id, amount, start_date)`
                 )
               }
 
-              if (!row.end_date && !row.term_months) {
+              // Check if at least one of end_date or term_months is provided (non-empty)
+              const hasEndDate = row.end_date?.trim()
+              const hasTermMonths = row.term_months?.trim()
+
+              if (!hasEndDate && !hasTermMonths) {
                 throw new Error(
                   `Row ${index + 1}: Must provide either end_date or term_months`
                 )
@@ -88,8 +92,8 @@ export function ImportDialog({
                 description: row.description?.trim() || null,
                 amount: row.amount.trim(),
                 start_date: row.start_date.trim(),
-                end_date: row.end_date?.trim() || null,
-                term_months: row.term_months?.trim() || null,
+                end_date: hasEndDate || null,
+                term_months: hasTermMonths || null,
               }
             })
 

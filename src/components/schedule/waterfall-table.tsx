@@ -7,8 +7,11 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
+import { PostConfirmationDialog } from './post-confirmation-dialog'
+import { postMonthToQuickBooks } from '@/app/(dashboard)/[organizationId]/actions'
+import { useRouter } from 'next/navigation'
 
 interface Contract {
   id: string
@@ -26,14 +29,47 @@ interface Schedule {
   recognition_month: string
   recognition_amount: number
   posted: boolean
+  posted_at: string | null
+  posted_by: string | null
+  journal_entry_id: string | null
 }
 
 interface WaterfallTableProps {
   contracts: Contract[]
   schedules: Schedule[]
+  organizationId: string
+  canPostToQuickBooks?: boolean
+  isQuickBooksConnected?: boolean
 }
 
-export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
+export function WaterfallTable({
+  contracts,
+  schedules,
+  organizationId,
+  canPostToQuickBooks = false,
+  isQuickBooksConnected = false,
+}: WaterfallTableProps) {
+  const router = useRouter()
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [qbConnected, setQbConnected] = useState(false)
+  const [hasAccountMapping, setHasAccountMapping] = useState(false)
+
+  // Check QB connection and account mapping from localStorage (mock)
+  useEffect(() => {
+    const connected = localStorage.getItem(`qb_connected_${organizationId}`)
+    const mapping = localStorage.getItem(`qb_mapping_${organizationId}`)
+
+    setQbConnected(connected === 'true')
+    setHasAccountMapping(!!mapping)
+  }, [organizationId])
+
+  // Use mock state for QB connection
+  const effectiveQbConnected = qbConnected
+  const effectiveCanPost = canPostToQuickBooks && qbConnected && hasAccountMapping
+
   // Get unique months across all schedules, sorted chronologically
   const months = useMemo(() => {
     const uniqueMonths = Array.from(
@@ -41,6 +77,17 @@ export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
     ).sort()
     return uniqueMonths
   }, [schedules])
+
+  // Determine which months are fully posted
+  const monthPostingStatus = useMemo(() => {
+    const status = new Map<string, boolean>()
+    months.forEach((month) => {
+      const monthSchedules = schedules.filter((s) => s.recognition_month === month)
+      const allPosted = monthSchedules.length > 0 && monthSchedules.every((s) => s.posted)
+      status.set(month, allPosted)
+    })
+    return status
+  }, [months, schedules])
 
   // Create a map for quick schedule lookup
   const scheduleMap = useMemo(() => {
@@ -78,6 +125,50 @@ export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
     return format(parseISO(dateString), 'MMM yyyy')
   }
 
+  // Handle opening the post dialog
+  const handlePostClick = (month: string) => {
+    setSelectedMonth(month)
+    setError(null)
+    setSuccess(null)
+  }
+
+  // Handle closing the dialog
+  const handleCloseDialog = () => {
+    if (!isProcessing) {
+      setSelectedMonth(null)
+      setError(null)
+    }
+  }
+
+  // Handle confirming the post
+  const handleConfirmPost = async () => {
+    if (!selectedMonth) return
+
+    setIsProcessing(true)
+    setError(null)
+
+    try {
+      const result = await postMonthToQuickBooks(organizationId, selectedMonth)
+
+      if (result.success) {
+        setSuccess(`Posted ${formatMonth(selectedMonth)} to QuickBooks (${result.journalEntryId})`)
+        setSelectedMonth(null)
+        router.refresh()
+      } else {
+        setError(result.error || 'Failed to post to QuickBooks')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Get contract count for selected month
+  const getMonthContractCount = (month: string) => {
+    return schedules.filter((s) => s.recognition_month === month).length
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
@@ -99,14 +190,34 @@ export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
               </th>
 
               {/* Dynamic month columns */}
-              {months.map((month) => (
-                <th
-                  key={month}
-                  className="whitespace-nowrap bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"
-                >
-                  {formatMonth(month)}
-                </th>
-              ))}
+              {months.map((month) => {
+                const isPosted = monthPostingStatus.get(month)
+                return (
+                  <th
+                    key={month}
+                    className="whitespace-nowrap bg-gray-50 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>{formatMonth(month)}</span>
+                      {isPosted && (
+                        <svg
+                          className="h-4 w-4 text-green-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
 
@@ -172,6 +283,69 @@ export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
                 </td>
               ))}
             </tr>
+
+            {/* Actions row - Post to QuickBooks */}
+            {(canPostToQuickBooks || qbConnected) && (
+              <tr className="bg-gray-50">
+                <td
+                  className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
+                  colSpan={4}
+                >
+                  QuickBooks
+                </td>
+
+                {/* Post buttons for each month */}
+                {months.map((month) => {
+                  const isPosted = monthPostingStatus.get(month)
+                  const monthTotal = monthlyTotals.get(month) || 0
+
+                  return (
+                    <td
+                      key={month}
+                      className="whitespace-nowrap px-4 py-3 text-right"
+                    >
+                      {isPosted ? (
+                        <div className="flex items-center justify-end gap-1.5 text-xs text-green-600">
+                          <svg
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          <span>Posted</span>
+                        </div>
+                      ) : effectiveCanPost ? (
+                        <button
+                          onClick={() => handlePostClick(month)}
+                          className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          disabled={monthTotal === 0}
+                          title={monthTotal === 0 ? 'No revenue to post' : 'Post to QuickBooks'}
+                        >
+                          Post
+                        </button>
+                      ) : !qbConnected ? (
+                        <span className="text-xs text-gray-400" title="Connect QuickBooks first">
+                          —
+                        </span>
+                      ) : !hasAccountMapping ? (
+                        <span className="text-xs text-gray-400" title="Configure account mapping">
+                          —
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -188,6 +362,99 @@ export function WaterfallTable({ contracts, schedules }: WaterfallTableProps) {
           </span>
         </div>
       </div>
+
+      {/* Success message */}
+      {success && (
+        <div className="border-t border-green-200 bg-green-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-green-800">
+            <svg
+              className="h-5 w-5 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            <span>{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-600 hover:text-green-700"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && (
+        <div className="border-t border-red-200 bg-red-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-800">
+            <svg
+              className="h-5 w-5 text-red-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 hover:text-red-700"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Post confirmation dialog */}
+      {selectedMonth && (
+        <PostConfirmationDialog
+          isOpen={!!selectedMonth}
+          onClose={handleCloseDialog}
+          onConfirm={handleConfirmPost}
+          month={selectedMonth}
+          totalAmount={monthlyTotals.get(selectedMonth) || 0}
+          contractCount={getMonthContractCount(selectedMonth)}
+          isProcessing={isProcessing}
+        />
+      )}
     </div>
   )
 }

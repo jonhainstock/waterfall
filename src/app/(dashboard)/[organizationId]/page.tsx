@@ -9,6 +9,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ImportButton } from '@/components/contracts/import-button'
+import { QuickBooksButton } from '@/components/quickbooks/quickbooks-button'
 import { WaterfallTable } from '@/components/schedule/waterfall-table'
 
 export default async function OrganizationPage({
@@ -80,7 +81,10 @@ export default async function OrganizationPage({
       contract_id,
       recognition_month,
       recognition_amount,
-      posted
+      posted,
+      posted_at,
+      posted_by,
+      journal_entry_id
     `
     )
     .eq('organization_id', organizationId)
@@ -98,7 +102,8 @@ export default async function OrganizationPage({
             Revenue recognition and waterfall schedule
           </p>
         </div>
-        <div className="mt-4 sm:mt-0">
+        <div className="mt-4 flex gap-3 sm:mt-0">
+          <QuickBooksButton organizationId={organizationId} />
           <ImportButton organizationId={organizationId} />
         </div>
       </div>
@@ -134,6 +139,9 @@ export default async function OrganizationPage({
           <WaterfallTable
             contracts={contracts || []}
             schedules={schedules || []}
+            organizationId={organizationId}
+            canPostToQuickBooks={true}
+            isQuickBooksConnected={true}
           />
         )}
       </div>

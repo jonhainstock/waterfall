@@ -194,3 +194,95 @@ export async function importContracts(
 
   return { succeeded, failed }
 }
+
+interface PostToQuickBooksResult {
+  success: boolean
+  journalEntryId?: string
+  error?: string
+}
+
+/**
+ * Post a month's revenue recognition to QuickBooks (MOCK implementation)
+ *
+ * This is a mockup - it doesn't actually call QuickBooks API yet.
+ * It simulates posting by marking schedules as posted with mock audit data.
+ */
+export async function postMonthToQuickBooks(
+  organizationId: string,
+  month: string
+): Promise<PostToQuickBooksResult> {
+  const supabase = await createClient()
+
+  // Check authentication
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  // Verify user has access to this organization
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('id', organizationId)
+    .eq('is_active', true)
+    .single()
+
+  if (!org) {
+    return { success: false, error: 'Organization not found' }
+  }
+
+  // TODO: Check if user has post_to_quickbooks permission
+  // TODO: Check if organization is connected to QuickBooks
+  // TODO: Check if account mapping exists
+
+  // Get schedules for this month
+  const { data: schedules, error: fetchError } = await supabase
+    .from('recognition_schedules')
+    .select('id, recognition_amount, posted')
+    .eq('organization_id', organizationId)
+    .eq('recognition_month', month)
+
+  if (fetchError || !schedules) {
+    return { success: false, error: 'Failed to fetch schedules' }
+  }
+
+  if (schedules.length === 0) {
+    return { success: false, error: 'No schedules found for this month' }
+  }
+
+  // Check if already posted
+  const alreadyPosted = schedules.some((s) => s.posted)
+  if (alreadyPosted) {
+    return { success: false, error: 'Month already posted to QuickBooks' }
+  }
+
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+
+  // Mock journal entry ID
+  const mockJournalEntryId = `JE-MOCK-${Date.now()}`
+
+  // Update schedules to mark as posted
+  const scheduleIds = schedules.map((s) => s.id)
+  const { error: updateError } = await supabase
+    .from('recognition_schedules')
+    .update({
+      posted: true,
+      posted_at: new Date().toISOString(),
+      posted_by: user.id,
+      journal_entry_id: mockJournalEntryId,
+    } as any)
+    .in('id', scheduleIds)
+
+  if (updateError) {
+    return { success: false, error: `Failed to update schedules: ${updateError.message}` }
+  }
+
+  // Revalidate the organization page
+  revalidatePath(`/${organizationId}`)
+
+  return { success: true, journalEntryId: mockJournalEntryId }
+}
