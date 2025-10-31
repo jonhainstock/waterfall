@@ -260,14 +260,16 @@ export async function deleteContract(contractId: string) {
 }
 ```
 
-### Middleware (Session Refresh)
+### Proxy (Session Refresh)
+
+> **Note:** Next.js 16+ uses `proxy.ts` with `export async function proxy()`. Next.js 15 and earlier use `middleware.ts` with `export async function middleware()`.
 
 ```typescript
-// middleware.ts
+// proxy.ts (Next.js 16+)
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -523,7 +525,7 @@ return data
 - Use browser client in Client Components
 - Check authentication before querying
 - Handle RLS errors gracefully
-- Use middleware to refresh sessions
+- Use proxy (Next.js 16+) or middleware (Next.js 15) to refresh sessions
 
 **Never:**
 - Use browser client on server

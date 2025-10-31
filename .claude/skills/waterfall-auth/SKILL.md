@@ -11,7 +11,7 @@ This skill covers Waterfall's authentication system using Supabase Auth, role-ba
 - Adding route protection
 - Checking user permissions
 - Managing team invitations
-- Writing middleware
+- Writing proxy/middleware (Next.js 16+ uses proxy.ts, 15 uses middleware.ts)
 - Role-based access control
 
 ## Authentication vs Authorization
@@ -230,7 +230,7 @@ export async function middleware(request: NextRequest) {
 }
 ```
 
-**Resource File:** See `resources/middleware-patterns.md` for detailed middleware patterns.
+**Resource File:** See `resources/proxy-patterns.md` for detailed proxy/middleware patterns.
 
 ## Root Route Authentication
 
@@ -744,7 +744,7 @@ export default async function AcceptInvitationPage({
 For detailed implementations, see:
 
 - **`resources/supabase-auth-flows.md`** - Complete signup, login, logout flows
-- **`resources/middleware-patterns.md`** - Route protection, session refresh
+- **`resources/proxy-patterns.md`** - Route protection, session refresh (Next.js 16+ proxy)
 - **`resources/permission-helpers.md`** - Complete permission helper functions
 
 ## Common Patterns

@@ -1,15 +1,17 @@
-# Middleware Patterns
+# Proxy Patterns (Next.js 16+)
 
-Route protection and session management patterns for Next.js middleware.
+Route protection and session management patterns for Next.js proxy (Next.js 16+) and middleware (Next.js 15).
 
-## Basic Auth Middleware
+> **Note:** Next.js 16 uses `proxy.ts` with `export async function proxy()`. Next.js 15 and earlier use `middleware.ts` with `export async function middleware()`. The patterns below show the Next.js 16 syntax.
+
+## Basic Auth Proxy
 
 ```typescript
-// middleware.ts
+// proxy.ts (Next.js 16+)
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -81,11 +83,11 @@ export const config = {
 }
 ```
 
-## Organization Access Middleware
+## Organization Access Proxy
 
 ```typescript
-// middleware.ts
-export async function middleware(request: NextRequest) {
+// proxy.ts (Next.js 16+)
+export async function proxy(request: NextRequest) {
   // ... supabase setup ...
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -112,7 +114,7 @@ export async function middleware(request: NextRequest) {
 }
 ```
 
-## Rate Limiting Middleware
+## Rate Limiting Proxy
 
 ```typescript
 // lib/rate-limit.ts
@@ -134,8 +136,8 @@ export function rateLimit(identifier: string, limit: number = 10): boolean {
   return true // Allowed
 }
 
-// middleware.ts
-export async function middleware(request: NextRequest) {
+// proxy.ts (Next.js 16+)
+export async function proxy(request: NextRequest) {
   // Rate limit by IP
   const ip = request.ip ?? 'unknown'
 
