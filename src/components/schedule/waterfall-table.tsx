@@ -49,6 +49,7 @@ interface Schedule {
   posted_at: string | null
   posted_by: string | null
   journal_entry_id: string | null
+  users?: { name: string | null } | null
 }
 
 interface WaterfallTableProps {
@@ -278,7 +279,7 @@ export function WaterfallTable({
       month,
       amount: totalAmount,
       journal_entry_id: firstSchedule.journal_entry_id,
-      posted_by: firstSchedule.posted_by,
+      posted_by: firstSchedule.users?.name || firstSchedule.posted_by,
       posted_at: firstSchedule.posted_at,
     })
   }

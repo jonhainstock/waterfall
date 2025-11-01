@@ -98,7 +98,8 @@ export default async function OrganizationPage({
       posted,
       posted_at,
       posted_by,
-      journal_entry_id
+      journal_entry_id,
+      users:posted_by(name)
     `
     )
     .eq('organization_id', organizationId)
