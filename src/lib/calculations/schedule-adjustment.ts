@@ -8,7 +8,7 @@
  */
 
 import Decimal from 'decimal.js'
-import { addMonths, startOfMonth, format, endOfMonth } from 'date-fns'
+import { addMonths, startOfMonth, format, endOfMonth, parseISO } from 'date-fns'
 import { generateRecognitionSchedule } from './revenue-recognition'
 
 export type AdjustmentMode = 'retroactive' | 'catch_up' | 'prospective' | 'none'
@@ -64,40 +64,69 @@ export function calculateRetroactiveAdjustments(
     .filter((s) => s.posted && !s.is_adjustment)
     .sort((a, b) => a.recognition_month.localeCompare(b.recognition_month))
 
-  // Create adjustment entries for each posted month
-  postedSchedules.forEach((schedule, index) => {
-    const newAmount = parseFloat(newMonthlyAmounts[index] || '0')
-    const difference = new Decimal(newAmount).minus(schedule.recognition_amount)
+  // BUILD MAP: Create a map of new schedule amounts by calendar month (YYYY-MM-DD)
+  // This allows us to match by calendar month instead of array index
+  const newScheduleMap = new Map<string, number>()
+  const start = parseISO(startDate) // Use parseISO to avoid timezone issues
+  newMonthlyAmounts.forEach((amount, index) => {
+    const monthDate = startOfMonth(addMonths(start, index))
+    const monthStr = format(monthDate, 'yyyy-MM-dd')
+    newScheduleMap.set(monthStr, parseFloat(amount))
+  })
 
-    // Only create adjustment if there's a meaningful difference (> 1 cent)
-    if (difference.abs().greaterThan(0.01)) {
+  // MATCH BY CALENDAR MONTH: Process each posted schedule
+  postedSchedules.forEach((schedule) => {
+    const newAmount = newScheduleMap.get(schedule.recognition_month)
+
+    if (newAmount === undefined) {
+      // ORPHANED MONTH: This posted month no longer exists in the new schedule
+      // (e.g., start date moved forward or end date moved backward)
+      // Create a reversal entry with negative amount
       adjustmentEntries.push({
         month: schedule.recognition_month,
-        amount: difference.toNumber(),
-        reason: `Contract ${invoiceId} amount correction`,
+        amount: -schedule.recognition_amount, // NEGATIVE to reverse
+        reason: `Date change - month removed from schedule (${invoiceId})`,
         adjustsScheduleId: schedule.id,
       })
+    } else {
+      // Month exists in both old and new schedules - check if amount changed
+      const difference = new Decimal(newAmount).minus(schedule.recognition_amount)
+
+      // Only create adjustment if there's a meaningful difference (> 1 cent)
+      if (difference.abs().greaterThan(0.01)) {
+        adjustmentEntries.push({
+          month: schedule.recognition_month,
+          amount: difference.toNumber(),
+          reason: `Contract amount correction (${invoiceId})`,
+          adjustsScheduleId: schedule.id,
+        })
+      }
     }
   })
 
   // Generate new unposted schedules for remaining months
-  const start = new Date(startDate)
+  const today = startOfMonth(new Date())
+
   newMonthlyAmounts.forEach((amount, index) => {
-    const monthDate = startOfMonth(addMonths(start, index))
+    const monthDate = addMonths(start, index) // start is already from parseISO
     const monthStr = format(monthDate, 'yyyy-MM-dd')
 
     // Check if this month is already posted
     const existingPosted = postedSchedules.find((s) => s.recognition_month === monthStr)
 
     if (!existingPosted) {
-      // This is an unposted month - create new schedule
+      // This is an unposted month
+      const isPastMonth = monthDate < today
+
       unpostedSchedules.push({
         recognition_month: monthStr,
         recognition_amount: parseFloat(amount),
         is_adjustment: false,
         adjusts_schedule_id: null,
         adjustment_type: null,
-        adjustment_reason: null,
+        adjustment_reason: isPastMonth
+          ? `New past month - requires manual review (${invoiceId})`
+          : null,
       })
     }
   })
@@ -137,7 +166,7 @@ export function calculateCatchUpAdjustment(
 
   // Build unposted schedules
   const unpostedSchedules: NewSchedule[] = []
-  const start = new Date(startDate)
+  const start = parseISO(startDate) // Use parseISO to avoid timezone issues
 
   newMonthlyAmounts.forEach((amount, index) => {
     const monthDate = startOfMonth(addMonths(start, index))
@@ -213,7 +242,7 @@ export function calculateProspectiveAdjustment(
   const remainingAmount = new Decimal(newContractAmount).minus(postedTotal)
 
   // Count unposted months
-  const start = new Date(startDate)
+  const start = parseISO(startDate) // Use parseISO to avoid timezone issues
   const allMonths: string[] = []
   for (let i = 0; i < newTermMonths; i++) {
     const monthDate = startOfMonth(addMonths(start, i))
