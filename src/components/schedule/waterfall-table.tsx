@@ -9,7 +9,7 @@
 
 import { useMemo, useState, useEffect, Fragment } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Check, X, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -29,15 +29,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { calculateDeferredBalanceForMonth } from '@/lib/calculations/revenue-recognition'
 import { EditContractSheet } from '@/components/contracts/edit-contract-sheet'
-import { DeleteContractDialog } from '@/components/contracts/delete-contract-dialog'
 
 interface Contract {
   id: string
@@ -92,7 +85,6 @@ export function WaterfallTable({
     posted_at: string | null
   } | null>(null)
   const [editingContractId, setEditingContractId] = useState<string | null>(null)
-  const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
 
   // Check accounting connection and account mapping from localStorage (mock)
   useEffect(() => {
@@ -188,34 +180,6 @@ export function WaterfallTable({
   // Define columns for TanStack Table
   const columns = useMemo<ColumnDef<Contract>[]>(() => {
     const fixedColumns: ColumnDef<Contract>[] = [
-      {
-        id: 'actions',
-        header: () => <div className="text-center">Actions</div>,
-        cell: ({ row }) => (
-          <div className="text-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setEditingContractId(row.original.id)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit Contract
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setDeletingContractId(row.original.id)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Contract
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ),
-      },
       {
         accessorKey: 'customer_name',
         header: 'Customer',
@@ -457,7 +421,11 @@ export function WaterfallTable({
 
           <TableBody>
             {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                onClick={() => setEditingContractId(row.original.id)}
+                className="cursor-pointer hover:bg-gray-50"
+              >
                 {row.getVisibleCells().map((cell, index) => {
                   const isBalanceCell = cell.column.id.endsWith('-balance')
                   return (
@@ -487,7 +455,6 @@ export function WaterfallTable({
               >
                 TOTAL
               </TableCell>
-              <TableCell key="end-empty" className="whitespace-nowrap px-4 py-4"></TableCell>
               <TableCell key="contract-amount-total" className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                 {formatCurrency(
                   contracts.reduce(
@@ -523,7 +490,7 @@ export function WaterfallTable({
                 <TableCell
                   key="platform-label"
                   className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
-                  colSpan={7}
+                  colSpan={6}
                 >
                   {platformDisplayName}
                 </TableCell>
@@ -651,14 +618,6 @@ export function WaterfallTable({
         contractId={editingContractId}
         open={editingContractId !== null}
         onOpenChange={(open) => !open && setEditingContractId(null)}
-      />
-
-      {/* Delete Contract Dialog */}
-      <DeleteContractDialog
-        organizationId={organizationId}
-        contractId={deletingContractId}
-        open={deletingContractId !== null}
-        onOpenChange={(open) => !open && setDeletingContractId(null)}
       />
     </div>
   )

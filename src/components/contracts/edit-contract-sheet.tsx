@@ -9,6 +9,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -22,6 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -31,13 +33,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, Trash2 } from 'lucide-react'
 import { contractEditSchema, type ContractEditInput, type AdjustmentMode, calculateTermMonths } from '@/lib/validations/contract'
 import {
   getContractWithSchedules,
   updateContractWithPosting,
   type Contract,
 } from '@/app/(dashboard)/[organizationId]/contract-actions'
+import { DeleteContractDialog } from './delete-contract-dialog'
 
 interface EditContractSheetProps {
   organizationId: string
@@ -61,6 +64,7 @@ export function EditContractSheet({
   const [adjustmentMode, setAdjustmentMode] = useState<AdjustmentMode>('none')
   const [catchUpMonth, setCatchUpMonth] = useState<string>('')
   const [unpostedMonths, setUnpostedMonths] = useState<string[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const form = useForm<ContractEditInput>({
     resolver: zodResolver(contractEditSchema),
@@ -198,7 +202,7 @@ export function EditContractSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-[600px] overflow-y-auto">
+      <SheetContent className="sm:max-w-[600px] flex flex-col">
         <SheetHeader>
           <SheetTitle>Edit Contract</SheetTitle>
           <SheetDescription>
@@ -206,7 +210,9 @@ export function EditContractSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {loading && !contract ? (
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto pr-1">
+          {loading && !contract ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
@@ -215,9 +221,9 @@ export function EditContractSheet({
             <AlertCircle className="h-4 w-4" />
             {error}
           </div>
-        ) : contract ? (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-6">
+          ) : contract ? (
+            <Form {...form}>
+              <div className="space-y-6 pt-6">
               {/* Posted Schedules Warning */}
               {postedCount > 0 && (
                 <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
@@ -296,12 +302,12 @@ export function EditContractSheet({
                   <FormItem>
                     <FormLabel>Contract Amount *</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        placeholder="10000.00"
-                        onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        placeholder="10,000.00"
                       />
                     </FormControl>
                     <FormMessage />
@@ -420,19 +426,41 @@ export function EditContractSheet({
                   )}
                 </div>
               )}
+              </div>
+            </Form>
+          ) : null}
+        </div>
 
-              {/* Form Actions */}
-              <div className="flex gap-3 pt-4">
+        {/* Sticky footer with actions */}
+        {contract && (
+          <SheetFooter className="border-t pt-4 mt-0">
+            <div className="flex justify-between items-center gap-3 w-full">
+              {/* Delete button - left aligned */}
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={loading}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+
+              {/* Cancel and Save - right aligned */}
+              <div className="flex gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => onOpenChange(false)}
                   disabled={loading}
-                  className="flex-1"
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading} className="flex-1">
+                <Button
+                  type="button"
+                  onClick={form.handleSubmit(onSubmit)}
+                  disabled={loading}
+                >
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -443,9 +471,17 @@ export function EditContractSheet({
                   )}
                 </Button>
               </div>
-            </form>
-          </Form>
-        ) : null}
+            </div>
+          </SheetFooter>
+        )}
+
+        {/* Delete Contract Dialog */}
+        <DeleteContractDialog
+          organizationId={organizationId}
+          contractId={contractId}
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+        />
       </SheetContent>
     </Sheet>
   )
