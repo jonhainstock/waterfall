@@ -148,6 +148,27 @@ export interface AccountingProvider {
   ): Promise<JournalEntryResult>
 
   /**
+   * Post adjustment journal entry (for contract corrections)
+   *
+   * Simplified method for posting adjustment entries.
+   * Amount can be positive (increase revenue) or negative (decrease revenue).
+   *
+   * @param tokens OAuth tokens
+   * @param params Adjustment entry parameters
+   * @returns Result with entry ID or error
+   */
+  postAdjustmentEntry(
+    tokens: AccountingTokens,
+    params: {
+      date: string // YYYY-MM-DD
+      deferredAccountId: string
+      revenueAccountId: string
+      amount: number // Can be positive or negative
+      memo: string
+    }
+  ): Promise<JournalEntryResult>
+
+  /**
    * Disconnect from accounting platform
    * (optional - some platforms don't support programmatic revocation)
    *

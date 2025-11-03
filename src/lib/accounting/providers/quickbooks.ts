@@ -212,6 +212,77 @@ export class QuickBooksProvider implements AccountingProvider {
   }
 
   /**
+   * Post adjustment journal entry to QuickBooks
+   * Simplified method for posting contract correction entries
+   */
+  async postAdjustmentEntry(
+    tokens: AccountingTokens,
+    params: {
+      date: string
+      deferredAccountId: string
+      revenueAccountId: string
+      amount: number
+      memo: string
+    }
+  ): Promise<JournalEntryResult> {
+    // TODO: Real implementation
+    // const QuickBooks = require('node-quickbooks')
+    // const qb = new QuickBooks(...)
+    // qb.setToken(tokens.accessToken)
+    //
+    // const journalEntry = {
+    //   TxnDate: params.date,
+    //   PrivateNote: params.memo,
+    //   Line: [
+    //     {
+    //       DetailType: 'JournalEntryLineDetail',
+    //       Amount: Math.abs(params.amount),
+    //       JournalEntryLineDetail: {
+    //         PostingType: params.amount > 0 ? 'Debit' : 'Credit',
+    //         AccountRef: { value: params.deferredAccountId }
+    //       }
+    //     },
+    //     {
+    //       DetailType: 'JournalEntryLineDetail',
+    //       Amount: Math.abs(params.amount),
+    //       JournalEntryLineDetail: {
+    //         PostingType: params.amount > 0 ? 'Credit' : 'Debit',
+    //         AccountRef: { value: params.revenueAccountId }
+    //       }
+    //     }
+    //   ]
+    // }
+    //
+    // return new Promise((resolve, reject) => {
+    //   qb.createJournalEntry(journalEntry, (err: any, entry: any) => {
+    //     if (err) return reject({ success: false, error: err.message })
+    //     resolve({ success: true, entryId: entry.Id })
+    //   })
+    // })
+
+    // Mock implementation
+    console.log('Mock QuickBooks adjustment entry:', {
+      date: params.date,
+      memo: params.memo,
+      amount: params.amount,
+      deferredAccount: params.deferredAccountId,
+      revenueAccount: params.revenueAccountId,
+      realmId: tokens.realmId,
+      posting: params.amount > 0
+        ? `DR Deferred ${Math.abs(params.amount)} / CR Revenue ${Math.abs(params.amount)}`
+        : `DR Revenue ${Math.abs(params.amount)} / CR Deferred ${Math.abs(params.amount)}`,
+    })
+
+    // Simulate API delay
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    return {
+      success: true,
+      entryId: `MOCKED-JE-${Date.now()}`,
+    }
+  }
+
+  /**
    * Disconnect from QuickBooks
    * (QuickBooks doesn't support token revocation, so this is a no-op)
    */

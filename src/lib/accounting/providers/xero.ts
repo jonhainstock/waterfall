@@ -196,6 +196,74 @@ export class XeroProvider implements AccountingProvider {
   }
 
   /**
+   * Post adjustment manual journal to Xero
+   * Simplified method for posting contract correction entries
+   */
+  async postAdjustmentEntry(
+    tokens: AccountingTokens,
+    params: {
+      date: string
+      deferredAccountId: string
+      revenueAccountId: string
+      amount: number
+      memo: string
+    }
+  ): Promise<JournalEntryResult> {
+    // TODO: Real implementation
+    // const XeroClient = require('xero-node')
+    // const xero = new XeroClient({ ... })
+    // await xero.setTokenSet({ access_token: tokens.accessToken, ... })
+    //
+    // const manualJournal = {
+    //   narration: params.memo,
+    //   date: params.date,
+    //   journalLines: [
+    //     {
+    //       accountCode: params.deferredAccountId,
+    //       lineAmount: params.amount > 0 ? params.amount : -params.amount,
+    //       taxType: 'NONE'
+    //     },
+    //     {
+    //       accountCode: params.revenueAccountId,
+    //       lineAmount: params.amount > 0 ? -params.amount : params.amount,
+    //       taxType: 'NONE'
+    //     }
+    //   ]
+    // }
+    //
+    // const response = await xero.accountingApi.createManualJournals(
+    //   tokens.realmId,
+    //   { manualJournals: [manualJournal] }
+    // )
+    //
+    // return {
+    //   success: true,
+    //   entryId: response.body.manualJournals[0].manualJournalID
+    // }
+
+    // Mock implementation
+    console.log('Mock Xero adjustment journal:', {
+      date: params.date,
+      narration: params.memo,
+      amount: params.amount,
+      deferredAccount: params.deferredAccountId,
+      revenueAccount: params.revenueAccountId,
+      tenantId: tokens.realmId,
+      posting: params.amount > 0
+        ? `DR Deferred ${Math.abs(params.amount)} / CR Revenue ${Math.abs(params.amount)}`
+        : `DR Revenue ${Math.abs(params.amount)} / CR Deferred ${Math.abs(params.amount)}`,
+    })
+
+    // Simulate API delay
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    return {
+      success: true,
+      entryId: `MOCKED-MJ-${Date.now()}`,
+    }
+  }
+
+  /**
    * Disconnect from Xero
    */
   async disconnect(tokens: AccountingTokens): Promise<void> {
