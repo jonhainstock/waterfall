@@ -38,17 +38,11 @@ interface Schedule {
 interface ExportCSVButtonProps {
   contracts: Contract[]
   schedules: Schedule[]
-  startDate?: string
-  endDate?: string
-  viewMode?: 'summary' | 'detail'
 }
 
 export function ExportCSVButton({
   contracts,
   schedules,
-  startDate,
-  endDate,
-  viewMode = 'summary',
 }: ExportCSVButtonProps) {
   // Format currency for CSV (remove $ and commas, keep decimals)
   const formatCurrency = (amount: number): string => {
@@ -71,53 +65,7 @@ export function ExportCSVButton({
     schedules.forEach((schedule) => {
       monthSet.add(schedule.recognition_month)
     })
-    const months = Array.from(monthSet).sort()
-
-    // Filter by date range if provided
-    if (startDate && endDate) {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      return months.filter((month) => {
-        const monthDate = new Date(month)
-        return monthDate >= start && monthDate <= end
-      })
-    }
-
-    return months
-  }
-
-  // Calculate starting balance (before date range)
-  const getStartingBalance = (contractId: string, contractAmount: number): number => {
-    if (!startDate) return contractAmount
-
-    // Get all revenue recognized before the start date
-    const beforeStartDate = new Date(startDate)
-    beforeStartDate.setDate(beforeStartDate.getDate() - 1)
-    const beforeStartMonth = beforeStartDate.toISOString().split('T')[0]
-
-    const recognized = parseFloat(
-      getRecognizedToDate(contractId, schedules, beforeStartMonth)
-    )
-    return contractAmount - recognized
-  }
-
-  // Calculate ending balance (after date range)
-  const getEndingBalance = (contractId: string, contractAmount: number): number => {
-    if (!endDate) {
-      // Calculate balance at the last month
-      const months = getAllMonths()
-      if (months.length === 0) return contractAmount
-
-      const balance = parseFloat(
-        calculateDeferredBalanceForMonth(contractAmount, contractId, schedules, months[months.length - 1])
-      )
-      return balance
-    }
-
-    const balance = parseFloat(
-      calculateDeferredBalanceForMonth(contractAmount, contractId, schedules, endDate)
-    )
-    return balance
+    return Array.from(monthSet).sort()
   }
 
   // Get revenue amount for a specific contract and month
@@ -138,7 +86,6 @@ export function ExportCSVButton({
   // Generate CSV data
   const generateCSVData = () => {
     const months = getAllMonths()
-    const hasDateRange = startDate && endDate
 
     // Build header row
     const header: string[] = [
@@ -150,29 +97,12 @@ export function ExportCSVButton({
       'Term',
     ]
 
-    // Add starting balance column if date range is active
-    if (hasDateRange) {
-      header.push('Starting Balance')
-    }
-
-    // Add monthly columns based on view mode
+    // Add monthly columns (revenue + balance for each month)
     months.forEach((month) => {
       const monthLabel = formatMonth(month)
-
-      if (viewMode === 'summary') {
-        // Summary mode: only revenue
-        header.push(monthLabel)
-      } else {
-        // Detail mode: revenue + balance
-        header.push(`${monthLabel} Revenue`)
-        header.push(`${monthLabel} Balance`)
-      }
+      header.push(`${monthLabel} Revenue`)
+      header.push(`${monthLabel} Balance`)
     })
-
-    // Add ending balance column if date range is active
-    if (hasDateRange) {
-      header.push('Ending Balance')
-    }
 
     // Build data rows
     const rows: any[][] = []
@@ -187,32 +117,13 @@ export function ExportCSVButton({
         `${contract.term_months}mo`,
       ]
 
-      // Add starting balance if date range is active
-      if (hasDateRange) {
-        const startingBalance = getStartingBalance(contract.id, contract.contract_amount)
-        row.push(formatCurrency(startingBalance))
-      }
-
-      // Add monthly data
+      // Add monthly data (revenue + balance for each month)
       months.forEach((month) => {
         const revenue = getRevenueForMonth(contract.id, month)
-
-        if (viewMode === 'summary') {
-          // Summary mode: only revenue
-          row.push(formatCurrency(revenue))
-        } else {
-          // Detail mode: revenue + balance
-          const balance = getBalanceForMonth(contract.id, contract.contract_amount, month)
-          row.push(formatCurrency(revenue))
-          row.push(formatCurrency(balance))
-        }
+        const balance = getBalanceForMonth(contract.id, contract.contract_amount, month)
+        row.push(formatCurrency(revenue))
+        row.push(formatCurrency(balance))
       })
-
-      // Add ending balance if date range is active
-      if (hasDateRange) {
-        const endingBalance = getEndingBalance(contract.id, contract.contract_amount)
-        row.push(formatCurrency(endingBalance))
-      }
 
       rows.push(row)
     })
@@ -222,38 +133,17 @@ export function ExportCSVButton({
       contracts.reduce((sum, c) => sum + c.contract_amount, 0)
     ), '']
 
-    // Add starting balance total if date range is active
-    if (hasDateRange) {
-      const startingBalanceTotal = contracts.reduce((sum, c) =>
-        sum + getStartingBalance(c.id, c.contract_amount), 0
-      )
-      totalsRow.push(formatCurrency(startingBalanceTotal))
-    }
-
-    // Add monthly totals
+    // Add monthly totals (revenue + balance for each month)
     months.forEach((month) => {
       const monthRevenue = contracts.reduce((sum, c) =>
         sum + getRevenueForMonth(c.id, month), 0
       )
-
-      if (viewMode === 'summary') {
-        totalsRow.push(formatCurrency(monthRevenue))
-      } else {
-        const monthBalance = contracts.reduce((sum, c) =>
-          sum + getBalanceForMonth(c.id, c.contract_amount, month), 0
-        )
-        totalsRow.push(formatCurrency(monthRevenue))
-        totalsRow.push(formatCurrency(monthBalance))
-      }
-    })
-
-    // Add ending balance total if date range is active
-    if (hasDateRange) {
-      const endingBalanceTotal = contracts.reduce((sum, c) =>
-        sum + getEndingBalance(c.id, c.contract_amount), 0
+      const monthBalance = contracts.reduce((sum, c) =>
+        sum + getBalanceForMonth(c.id, c.contract_amount, month), 0
       )
-      totalsRow.push(formatCurrency(endingBalanceTotal))
-    }
+      totalsRow.push(formatCurrency(monthRevenue))
+      totalsRow.push(formatCurrency(monthBalance))
+    })
 
     rows.push(totalsRow)
 
@@ -266,13 +156,7 @@ export function ExportCSVButton({
     const csv = Papa.unparse(data)
 
     // Create filename
-    let filename = 'waterfall-schedule'
-    if (startDate && endDate) {
-      filename += `-${startDate}-to-${endDate}`
-    } else {
-      filename += `-${new Date().toISOString().split('T')[0]}`
-    }
-    filename += '.csv'
+    const filename = `waterfall-schedule-${new Date().toISOString().split('T')[0]}.csv`
 
     // Create blob and download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })

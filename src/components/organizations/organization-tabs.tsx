@@ -11,8 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WaterfallTable } from '@/components/schedule/waterfall-table'
 import { ActivityHistory } from '@/components/activity/activity-history'
 import { ImportButton } from '@/components/contracts/import-button'
-import { DateRangeFilter } from '@/components/schedule/date-range-filter'
-import { ViewModeToggle } from '@/components/schedule/view-mode-toggle'
 import { ExportCSVButton } from '@/components/schedule/export-csv-button'
 import { FileText } from 'lucide-react'
 
@@ -22,9 +20,6 @@ interface OrganizationTabsProps {
   contracts: any[]
   schedules: any[]
   connectedPlatform?: string | null
-  startDate?: string
-  endDate?: string
-  viewMode?: 'summary' | 'detail'
 }
 
 export function OrganizationTabs({
@@ -33,9 +28,6 @@ export function OrganizationTabs({
   contracts,
   schedules,
   connectedPlatform,
-  startDate,
-  endDate,
-  viewMode = 'summary',
 }: OrganizationTabsProps) {
   const router = useRouter()
 
@@ -56,18 +48,6 @@ export function OrganizationTabs({
             <ExportCSVButton
               contracts={contracts}
               schedules={schedules}
-              startDate={startDate}
-              endDate={endDate}
-              viewMode={viewMode}
-            />
-            <ViewModeToggle
-              organizationId={organizationId}
-              currentViewMode={viewMode}
-            />
-            <DateRangeFilter
-              organizationId={organizationId}
-              currentStartDate={startDate}
-              currentEndDate={endDate}
             />
           </div>
         )}
@@ -94,8 +74,6 @@ export function OrganizationTabs({
             organizationId={organizationId}
             canPostToAccounting={true}
             connectedPlatform={connectedPlatform}
-            dateRange={startDate && endDate ? { startDate, endDate } : undefined}
-            viewMode={viewMode}
           />
         )}
       </TabsContent>

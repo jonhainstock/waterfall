@@ -9,7 +9,7 @@
 
 import { useMemo, useState, useEffect, Fragment } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Check, X } from 'lucide-react'
+import { Check, X, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -29,7 +29,15 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { calculateDeferredBalanceForMonth } from '@/lib/calculations/revenue-recognition'
+import { EditContractSheet } from '@/components/contracts/edit-contract-sheet'
+import { DeleteContractDialog } from '@/components/contracts/delete-contract-dialog'
 
 interface Contract {
   id: string
@@ -59,11 +67,6 @@ interface WaterfallTableProps {
   organizationId: string
   canPostToAccounting?: boolean
   connectedPlatform?: string | null
-  dateRange?: {
-    startDate: string
-    endDate: string
-  }
-  viewMode?: 'summary' | 'detail'
 }
 
 export function WaterfallTable({
@@ -72,8 +75,6 @@ export function WaterfallTable({
   organizationId,
   canPostToAccounting = false,
   connectedPlatform = null,
-  dateRange,
-  viewMode = 'summary',
 }: WaterfallTableProps) {
   const router = useRouter()
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
@@ -90,6 +91,8 @@ export function WaterfallTable({
     posted_by: string | null
     posted_at: string | null
   } | null>(null)
+  const [editingContractId, setEditingContractId] = useState<string | null>(null)
+  const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
 
   // Check accounting connection and account mapping from localStorage (mock)
   useEffect(() => {
@@ -114,19 +117,8 @@ export function WaterfallTable({
       new Set(schedules.map((s) => s.recognition_month))
     ).sort()
 
-    // Filter months within date range if provided
-    if (dateRange) {
-      const startDate = new Date(dateRange.startDate)
-      const endDate = new Date(dateRange.endDate)
-
-      uniqueMonths = uniqueMonths.filter((month) => {
-        const monthDate = new Date(month)
-        return monthDate >= startDate && monthDate <= endDate
-      })
-    }
-
     return uniqueMonths
-  }, [schedules, dateRange])
+  }, [schedules])
 
   // Determine which months are fully posted
   const monthPostingStatus = useMemo(() => {
@@ -193,72 +185,54 @@ export function WaterfallTable({
     return balances
   }, [months, contracts, balanceMap])
 
-  // Calculate starting balance (before date range) for each contract
-  const startingBalances = useMemo(() => {
-    if (!dateRange) return null
-
-    const balances = new Map<string, number>()
-    const startDate = new Date(dateRange.startDate)
-
-    contracts.forEach((contract) => {
-      // Sum recognition before startDate
-      const recognizedBefore = schedules
-        .filter((s) => {
-          const scheduleDate = new Date(s.recognition_month)
-          return s.contract_id === contract.id && scheduleDate < startDate
-        })
-        .reduce((sum, s) => sum + s.recognition_amount, 0)
-
-      const startingBalance = contract.contract_amount - recognizedBefore
-      balances.set(contract.id, startingBalance)
-    })
-
-    return balances
-  }, [dateRange, contracts, schedules])
-
-  // Calculate ending balance (after date range) for each contract
-  const endingBalances = useMemo(() => {
-    if (!dateRange) return null
-
-    const balances = new Map<string, number>()
-    const endDate = new Date(dateRange.endDate)
-
-    contracts.forEach((contract) => {
-      // Sum recognition through endDate
-      const recognizedThrough = schedules
-        .filter((s) => {
-          const scheduleDate = new Date(s.recognition_month)
-          return s.contract_id === contract.id && scheduleDate <= endDate
-        })
-        .reduce((sum, s) => sum + s.recognition_amount, 0)
-
-      const endingBalance = contract.contract_amount - recognizedThrough
-      balances.set(contract.id, endingBalance)
-    })
-
-    return balances
-  }, [dateRange, contracts, schedules])
-
   // Define columns for TanStack Table
   const columns = useMemo<ColumnDef<Contract>[]>(() => {
     const fixedColumns: ColumnDef<Contract>[] = [
       {
-        accessorKey: 'invoice_id',
-        header: 'Invoice ID',
+        id: 'actions',
+        header: () => <div className="text-center">Actions</div>,
         cell: ({ row }) => (
-          <div className="font-medium text-gray-900">{row.original.invoice_id}</div>
+          <div className="text-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setEditingContractId(row.original.id)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit Contract
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setDeletingContractId(row.original.id)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Contract
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         ),
       },
       {
         accessorKey: 'customer_name',
         header: 'Customer',
         cell: ({ row }) => (
-          <div className="text-gray-700">{row.original.customer_name || '—'}</div>
+          <div className="font-medium text-gray-900">{row.original.customer_name || '—'}</div>
+        ),
+      },
+      {
+        accessorKey: 'invoice_id',
+        header: 'Invoice',
+        cell: ({ row }) => (
+          <div className="text-gray-700 text-sm">{row.original.invoice_id}</div>
         ),
       },
       {
         accessorKey: 'start_date',
-        header: 'Start Date',
+        header: 'Start',
         cell: ({ row }) => (
           <div className="text-gray-700 whitespace-nowrap">
             {formatDate(row.original.start_date)}
@@ -267,7 +241,7 @@ export function WaterfallTable({
       },
       {
         accessorKey: 'end_date',
-        header: 'End Date',
+        header: 'End',
         cell: ({ row }) => (
           <div className="text-gray-700 whitespace-nowrap">
             {formatDate(row.original.end_date)}
@@ -276,7 +250,7 @@ export function WaterfallTable({
       },
       {
         accessorKey: 'contract_amount',
-        header: () => <div className="text-right">Contract Amount</div>,
+        header: () => <div className="text-right">Amount</div>,
         cell: ({ row }) => (
           <div className="text-right text-gray-900">
             {formatCurrency(row.original.contract_amount)}
@@ -292,40 +266,13 @@ export function WaterfallTable({
       },
     ]
 
-    // Add starting balance column if date range is active
-    const startBalanceColumn: ColumnDef<Contract>[] = dateRange && startingBalances ? [
-      {
-        id: 'starting-balance',
-        header: () => (
-          <div className="text-right text-gray-700 whitespace-nowrap font-medium">
-            Starting Balance
-          </div>
-        ),
-        cell: ({ row }) => {
-          const balance = startingBalances.get(row.original.id) || 0
-          return (
-            <div className="text-right text-gray-900 bg-blue-50 font-medium">
-              {formatCurrency(balance)}
-            </div>
-          )
-        },
-      },
-    ] : []
-
-    // Add dynamic month columns
-    // In SUMMARY mode: Show only revenue columns
-    // In DETAIL mode: Show revenue + balance columns
-    const monthColumns: ColumnDef<Contract>[] = months.flatMap((month) => {
+    // Add dynamic month columns with revenue + balance (column groups)
+    const monthColumns: ColumnDef<Contract>[] = months.map((month) => {
       const isPosted = monthPostingStatus.get(month)
 
       const revenueColumn: ColumnDef<Contract> = {
         id: `${month}-revenue`,
-        header: () => (
-          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-            <span>{formatMonth(month)}</span>
-            {isPosted && <Check className="h-4 w-4 text-green-600" />}
-          </div>
-        ),
+        header: 'Revenue',
         cell: ({ row }) => {
           const key = `${row.original.id}-${month}`
           const amount = scheduleMap.get(key)
@@ -337,57 +284,38 @@ export function WaterfallTable({
         },
       }
 
-      // Only show balance column in DETAIL mode
-      if (viewMode === 'detail') {
-        const balanceColumn: ColumnDef<Contract> = {
-          id: `${month}-balance`,
-          header: () => (
-            <div className="text-right text-gray-500 whitespace-nowrap text-xs font-normal">
-              Balance
-            </div>
-          ),
-          cell: ({ row }) => {
-            const key = `${row.original.id}-${month}`
-            const balance = balanceMap.get(key)
-            return (
-              <div className="text-right text-gray-600 text-sm bg-gray-50/50">
-                {balance !== undefined ? formatCurrency(balance) : '—'}
-              </div>
-            )
-          },
-          meta: {
-            headerClassName: 'bg-gray-100/50',
-          },
-        }
-        return [revenueColumn, balanceColumn]
-      }
-
-      // In summary mode, only return revenue column
-      return [revenueColumn]
-    })
-
-    // Add ending balance column if date range is active
-    const endBalanceColumn: ColumnDef<Contract>[] = dateRange && endingBalances ? [
-      {
-        id: 'ending-balance',
-        header: () => (
-          <div className="text-right text-gray-700 whitespace-nowrap font-medium">
-            Ending Balance
-          </div>
-        ),
+      const balanceColumn: ColumnDef<Contract> = {
+        id: `${month}-balance`,
+        header: 'Balance',
         cell: ({ row }) => {
-          const balance = endingBalances.get(row.original.id) || 0
+          const key = `${row.original.id}-${month}`
+          const balance = balanceMap.get(key)
           return (
-            <div className="text-right text-gray-900 bg-blue-50 font-medium">
-              {formatCurrency(balance)}
+            <div className="text-right text-blue-700 text-sm">
+              {balance !== undefined ? formatCurrency(balance) : '—'}
             </div>
           )
         },
-      },
-    ] : []
+      }
 
-    return [...fixedColumns, ...startBalanceColumn, ...monthColumns, ...endBalanceColumn]
-  }, [months, monthPostingStatus, scheduleMap, balanceMap, dateRange, startingBalances, endingBalances, viewMode])
+      // Create a column group with month header spanning revenue + balance
+      return {
+        id: `${month}-group`,
+        header: () => (
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+            <span>{formatMonth(month)}</span>
+            {isPosted && <Check className="h-4 w-4 text-green-600" />}
+          </div>
+        ),
+        columns: [revenueColumn, balanceColumn],
+        meta: {
+          headerClassName: 'border-r-2 border-gray-300',
+        },
+      } as ColumnDef<Contract>
+    })
+
+    return [...fixedColumns, ...monthColumns]
+  }, [months, monthPostingStatus, scheduleMap, balanceMap])
 
   // Initialize TanStack Table
   const table = useReactTable({
@@ -401,7 +329,8 @@ export function WaterfallTable({
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount)
   }
 
@@ -484,25 +413,44 @@ export function WaterfallTable({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header, index) => (
-                  <TableHead
-                    key={header.id}
-                    className={`px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 ${
-                      index === 0
-                        ? 'sticky left-0 z-10 bg-gray-50'
-                        : 'bg-gray-50'
-                    } ${
-                      index >= 2 ? 'text-right' : 'text-left'
-                    }`}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  const isBalanceHeader = header.id.includes('-balance')
+                  const isGroupHeader = header.id.includes('-group')
+                  return (
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      className={`px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 bg-gray-50 ${
+                        header.column.getIsFirstColumn()
+                          ? 'sticky left-0 z-10'
+                          : ''
+                      } ${
+                        header.column.columnDef.header === 'Revenue' ||
+                        header.column.columnDef.header === 'Balance' ||
+                        isBalanceHeader
+                          ? 'text-right'
+                          : header.id === 'actions' || header.id === 'term_months'
+                          ? 'text-center'
+                          : header.index >= 2
+                          ? 'text-right'
+                          : 'text-left'
+                      } ${
+                        isBalanceHeader ? 'text-blue-600 font-normal' : ''
+                      } ${
+                        header.column.columnDef.meta?.headerClassName || ''
+                      } ${
+                        isGroupHeader || isBalanceHeader ? 'border-r-2 border-gray-300' : ''
+                      }`}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  )
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -510,18 +458,23 @@ export function WaterfallTable({
           <TableBody>
             {table.getRowModel().rows.map((row) => (
               <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell, index) => (
-                  <TableCell
-                    key={cell.id}
-                    className={`whitespace-nowrap px-4 py-4 text-sm ${
-                      index === 0
-                        ? 'sticky left-0 z-10 bg-white group-hover:bg-gray-50'
-                        : ''
-                    }`}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+                {row.getVisibleCells().map((cell, index) => {
+                  const isBalanceCell = cell.column.id.endsWith('-balance')
+                  return (
+                    <TableCell
+                      key={cell.id}
+                      className={`whitespace-nowrap px-4 py-4 text-sm ${
+                        index === 0
+                          ? 'sticky left-0 z-10 bg-white group-hover:bg-gray-50'
+                          : ''
+                      } ${
+                        isBalanceCell ? 'border-r-2 border-gray-300' : ''
+                      }`}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  )
+                })}
               </TableRow>
             ))}
 
@@ -534,6 +487,7 @@ export function WaterfallTable({
               >
                 TOTAL
               </TableCell>
+              <TableCell key="end-empty" className="whitespace-nowrap px-4 py-4"></TableCell>
               <TableCell key="contract-amount-total" className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                 {formatCurrency(
                   contracts.reduce(
@@ -542,57 +496,25 @@ export function WaterfallTable({
                   )
                 )}
               </TableCell>
-              <TableCell key="dates-empty" className="whitespace-nowrap px-4 py-4"></TableCell>
-
-              {/* Starting balance total if date range active */}
-              {dateRange && startingBalances ? (
-                <Fragment key="starting-balance-total">
-                  <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900 bg-blue-50 font-bold">
-                    {formatCurrency(
-                      contracts.reduce((sum, c) => sum + (startingBalances.get(c.id) || 0), 0)
-                    )}
-                  </TableCell>
-                </Fragment>
-              ) : null}
+              <TableCell key="term-empty" className="whitespace-nowrap px-4 py-4"></TableCell>
 
               {/* Monthly revenue totals and deferred balance totals */}
-              {months.flatMap((month) => {
-                const cells = [
-                  /* Revenue total */
-                  <TableCell
-                    key={`${month}-revenue-total`}
-                    className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
-                  >
-                    {formatCurrency(monthlyTotals.get(month) || 0)}
-                  </TableCell>,
-                ]
-
-                // Only show balance total in DETAIL mode
-                if (viewMode === 'detail') {
-                  cells.push(
-                    /* Balance total */
-                    <TableCell
-                      key={`${month}-balance-total`}
-                      className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-600 bg-gray-50"
-                    >
-                      {formatCurrency(monthlyDeferredBalances.get(month) || 0)}
-                    </TableCell>
-                  )
-                }
-
-                return cells
-              })}
-
-              {/* Ending balance total if date range active */}
-              {dateRange && endingBalances ? (
-                <Fragment key="ending-balance-total">
-                  <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900 bg-blue-50 font-bold">
-                    {formatCurrency(
-                      contracts.reduce((sum, c) => sum + (endingBalances.get(c.id) || 0), 0)
-                    )}
-                  </TableCell>
-                </Fragment>
-              ) : null}
+              {months.flatMap((month) => [
+                /* Revenue total */
+                <TableCell
+                  key={`${month}-revenue-total`}
+                  className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
+                >
+                  {formatCurrency(monthlyTotals.get(month) || 0)}
+                </TableCell>,
+                /* Balance total */
+                <TableCell
+                  key={`${month}-balance-total`}
+                  className="whitespace-nowrap px-4 py-4 text-right text-sm text-blue-700 border-r-2 border-gray-300"
+                >
+                  {formatCurrency(monthlyDeferredBalances.get(month) || 0)}
+                </TableCell>,
+              ])}
             </TableRow>
 
             {/* Actions row - Post to Accounting Platform */}
@@ -601,17 +523,10 @@ export function WaterfallTable({
                 <TableCell
                   key="platform-label"
                   className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
-                  colSpan={6}
+                  colSpan={7}
                 >
                   {platformDisplayName}
                 </TableCell>
-
-                {/* Empty cell for starting balance column if date range active */}
-                {dateRange && startingBalances ? (
-                  <Fragment key="starting-balance-action">
-                    <TableCell className="whitespace-nowrap px-4 py-3 bg-gray-50"></TableCell>
-                  </Fragment>
-                ) : null}
 
                 {/* Post buttons for each month */}
                 {/* In detail mode: spans 2 columns (revenue + balance) */}
@@ -623,7 +538,7 @@ export function WaterfallTable({
                   return (
                     <TableCell
                       key={month}
-                      colSpan={viewMode === 'detail' ? 2 : 1}
+                      colSpan={2}
                       className="whitespace-nowrap px-4 py-3 text-right"
                     >
                       {isPosted ? (
@@ -658,13 +573,6 @@ export function WaterfallTable({
                     </TableCell>
                   )
                 })}
-
-                {/* Empty cell for ending balance column if date range active */}
-                {dateRange && endingBalances ? (
-                  <Fragment key="ending-balance-action">
-                    <TableCell className="whitespace-nowrap px-4 py-3 bg-gray-50"></TableCell>
-                  </Fragment>
-                ) : null}
               </TableRow>
             )}
           </TableBody>
@@ -735,6 +643,22 @@ export function WaterfallTable({
         onClose={() => setViewingPostActivity(null)}
         activity={viewingPostActivity}
         platformName={platformDisplayName}
+      />
+
+      {/* Edit Contract Sheet */}
+      <EditContractSheet
+        organizationId={organizationId}
+        contractId={editingContractId}
+        open={editingContractId !== null}
+        onOpenChange={(open) => !open && setEditingContractId(null)}
+      />
+
+      {/* Delete Contract Dialog */}
+      <DeleteContractDialog
+        organizationId={organizationId}
+        contractId={deletingContractId}
+        open={deletingContractId !== null}
+        onOpenChange={(open) => !open && setDeletingContractId(null)}
       />
     </div>
   )
