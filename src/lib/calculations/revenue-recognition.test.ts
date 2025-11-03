@@ -11,6 +11,9 @@ import {
   generateRecognitionSchedule,
   calculateTotalRecognized,
   calculateDeferredRevenue,
+  getRecognizedToDate,
+  calculateDeferredBalanceForMonth,
+  type ScheduleItem,
 } from './revenue-recognition'
 
 describe('calculateMonthlyRecognition', () => {
@@ -233,5 +236,291 @@ describe('Revenue Recognition Integration', () => {
 
     // Verify last month has adjustment
     expect(schedule[11]).toBe('833.37')
+  })
+})
+
+describe('getRecognizedToDate', () => {
+  const contractId = 'contract-123'
+
+  it('should calculate cumulative recognition through first month', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+    ]
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-01-01')
+    expect(result).toBe('1000.00')
+  })
+
+  it('should calculate cumulative recognition through multiple months', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+    ]
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-03-01')
+    expect(result).toBe('3000.00')
+  })
+
+  it('should handle schedules with decimal amounts', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 833.33 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 833.33 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 833.37 },
+    ]
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-03-01')
+    expect(result).toBe('2500.03')
+  })
+
+  it('should filter by contract_id', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: 'contract-123', recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: 'contract-456', recognition_month: '2024-01-01', recognition_amount: 2000 },
+      { contract_id: 'contract-123', recognition_month: '2024-02-01', recognition_amount: 1000 },
+    ]
+
+    const result = getRecognizedToDate('contract-123', schedules, '2024-02-01')
+    expect(result).toBe('2000.00')
+  })
+
+  it('should only include months up to and including the target month', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+    ]
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-02-01')
+    expect(result).toBe('2000.00') // Should NOT include March or April
+  })
+
+  it('should return zero for contract with no schedules', () => {
+    const schedules: ScheduleItem[] = []
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-01-01')
+    expect(result).toBe('0.00')
+  })
+
+  it('should return zero for month before any schedules start', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+    ]
+
+    const result = getRecognizedToDate(contractId, schedules, '2024-01-01')
+    expect(result).toBe('0.00')
+  })
+})
+
+describe('calculateDeferredBalanceForMonth', () => {
+  const contractId = 'contract-123'
+  const contractAmount = 12000
+
+  it('should calculate deferred balance after first month', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-01-01'
+    )
+    expect(result).toBe('11000.00') // 12000 - 1000
+  })
+
+  it('should calculate deferred balance at mid-contract', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-05-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-06-01', recognition_amount: 1000 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-06-01'
+    )
+    expect(result).toBe('6000.00') // 12000 - 6000
+  })
+
+  it('should show zero deferred balance at contract end', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-05-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-06-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-07-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-08-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-09-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-10-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-11-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-12-01', recognition_amount: 1000 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-12-01'
+    )
+    expect(result).toBe('0.00')
+  })
+
+  it('should handle contracts with rounding adjustments', () => {
+    const contractAmount = 10000
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-01-01', recognition_amount: 833.33 },
+      { contract_id: contractId, recognition_month: '2024-02-01', recognition_amount: 833.33 },
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 833.33 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-03-01'
+    )
+    // 10000 - 2499.99 = 7500.01
+    expect(result).toBe('7500.01')
+  })
+
+  it('should show full contract amount before any recognition', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: contractId, recognition_month: '2024-03-01', recognition_amount: 1000 },
+      { contract_id: contractId, recognition_month: '2024-04-01', recognition_amount: 1000 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-01-01'
+    )
+    expect(result).toBe('12000.00') // No recognition yet
+  })
+
+  it('should handle multiple contracts independently', () => {
+    const schedules: ScheduleItem[] = [
+      { contract_id: 'contract-123', recognition_month: '2024-01-01', recognition_amount: 1000 },
+      { contract_id: 'contract-456', recognition_month: '2024-01-01', recognition_amount: 2000 },
+      { contract_id: 'contract-123', recognition_month: '2024-02-01', recognition_amount: 1000 },
+    ]
+
+    const result = calculateDeferredBalanceForMonth(
+      contractAmount,
+      'contract-123',
+      schedules,
+      '2024-02-01'
+    )
+    expect(result).toBe('10000.00') // Only includes contract-123's recognition
+  })
+})
+
+// Integration test for deferred balance through contract lifecycle
+describe('Deferred Balance Integration', () => {
+  it('should track deferred balance decreasing each month for 12-month contract', () => {
+    const contractAmount = 12000
+    const contractId = 'contract-123'
+
+    // Create 12 months of schedules
+    const schedules: ScheduleItem[] = []
+    for (let month = 0; month < 12; month++) {
+      const date = new Date(2024, month, 1)
+      const monthStr = date.toISOString().split('T')[0]
+      schedules.push({
+        contract_id: contractId,
+        recognition_month: monthStr,
+        recognition_amount: 1000,
+      })
+    }
+
+    // Check balance decreases by 1000 each month
+    const month1Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-01-01'
+    )
+    expect(month1Balance).toBe('11000.00')
+
+    const month6Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-06-01'
+    )
+    expect(month6Balance).toBe('6000.00')
+
+    const month12Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-12-01'
+    )
+    expect(month12Balance).toBe('0.00')
+  })
+
+  it('should handle contract with rounding through entire lifecycle', () => {
+    const contractAmount = 10000
+    const contractId = 'contract-123'
+
+    // Create 12 months with rounding adjustment in last month
+    const schedules: ScheduleItem[] = []
+    for (let month = 0; month < 11; month++) {
+      const date = new Date(2024, month, 1)
+      const monthStr = date.toISOString().split('T')[0]
+      schedules.push({
+        contract_id: contractId,
+        recognition_month: monthStr,
+        recognition_amount: 833.33,
+      })
+    }
+    // Last month adjusted for rounding
+    schedules.push({
+      contract_id: contractId,
+      recognition_month: '2024-12-01',
+      recognition_amount: 833.37,
+    })
+
+    // Check various points
+    const month1Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-01-01'
+    )
+    expect(month1Balance).toBe('9166.67')
+
+    const month6Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-06-01'
+    )
+    expect(month6Balance).toBe('5000.02')
+
+    // After last month with adjustment, balance should be exactly zero
+    const month12Balance = calculateDeferredBalanceForMonth(
+      contractAmount,
+      contractId,
+      schedules,
+      '2024-12-01'
+    )
+    expect(month12Balance).toBe('0.00')
   })
 })

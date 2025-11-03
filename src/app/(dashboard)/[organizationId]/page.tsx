@@ -18,11 +18,14 @@ export default async function OrganizationPage({
   searchParams,
 }: {
   params: Promise<{ organizationId: string }>
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; startDate?: string; endDate?: string; viewMode?: string }>
 }) {
   const { organizationId } = await params
-  const { tab } = await searchParams
-  const activeTab = tab || 'waterfall'
+  const searchParamsResolved = await searchParams
+  const activeTab = searchParamsResolved.tab || 'waterfall'
+  const startDate = searchParamsResolved.startDate
+  const endDate = searchParamsResolved.endDate
+
   const supabase = await createClient()
 
   // Check authentication
@@ -105,6 +108,26 @@ export default async function OrganizationPage({
     .eq('organization_id', organizationId)
     .order('recognition_month', { ascending: true })
 
+  // Calculate smart default date range from contracts
+  // This ensures Summary mode is always available with meaningful data
+  const smartDateRange = contracts && contracts.length > 0 ? {
+    startDate: contracts.reduce((min, c) =>
+      c.start_date < min ? c.start_date : min,
+      contracts[0].start_date
+    ),
+    endDate: contracts.reduce((max, c) =>
+      c.end_date > max ? c.end_date : max,
+      contracts[0].end_date
+    )
+  } : null
+
+  // Use user-selected dates if present, otherwise use smart defaults
+  const effectiveStartDate = startDate || smartDateRange?.startDate
+  const effectiveEndDate = endDate || smartDateRange?.endDate
+
+  // View mode: default to summary, allow user to switch to detail
+  const viewMode = (searchParamsResolved.viewMode === 'detail' ? 'detail' : 'summary') as 'summary' | 'detail'
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
@@ -134,6 +157,9 @@ export default async function OrganizationPage({
         contracts={contracts || []}
         schedules={schedules || []}
         connectedPlatform={connectedPlatform}
+        startDate={effectiveStartDate}
+        endDate={effectiveEndDate}
+        viewMode={viewMode}
       />
     </div>
   )

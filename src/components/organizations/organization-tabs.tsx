@@ -11,6 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WaterfallTable } from '@/components/schedule/waterfall-table'
 import { ActivityHistory } from '@/components/activity/activity-history'
 import { ImportButton } from '@/components/contracts/import-button'
+import { DateRangeFilter } from '@/components/schedule/date-range-filter'
+import { ViewModeToggle } from '@/components/schedule/view-mode-toggle'
+import { ExportCSVButton } from '@/components/schedule/export-csv-button'
 import { FileText } from 'lucide-react'
 
 interface OrganizationTabsProps {
@@ -19,6 +22,9 @@ interface OrganizationTabsProps {
   contracts: any[]
   schedules: any[]
   connectedPlatform?: string | null
+  startDate?: string
+  endDate?: string
+  viewMode?: 'summary' | 'detail'
 }
 
 export function OrganizationTabs({
@@ -27,6 +33,9 @@ export function OrganizationTabs({
   contracts,
   schedules,
   connectedPlatform,
+  startDate,
+  endDate,
+  viewMode = 'summary',
 }: OrganizationTabsProps) {
   const router = useRouter()
 
@@ -36,10 +45,33 @@ export function OrganizationTabs({
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-8">
-      <TabsList>
-        <TabsTrigger value="waterfall">Waterfall Schedule</TabsTrigger>
-        <TabsTrigger value="history">Activity History</TabsTrigger>
-      </TabsList>
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <TabsList>
+          <TabsTrigger value="waterfall">Waterfall Schedule</TabsTrigger>
+          <TabsTrigger value="history">Activity History</TabsTrigger>
+        </TabsList>
+
+        {activeTab === 'waterfall' && (
+          <div className="flex items-center gap-3">
+            <ExportCSVButton
+              contracts={contracts}
+              schedules={schedules}
+              startDate={startDate}
+              endDate={endDate}
+              viewMode={viewMode}
+            />
+            <ViewModeToggle
+              organizationId={organizationId}
+              currentViewMode={viewMode}
+            />
+            <DateRangeFilter
+              organizationId={organizationId}
+              currentStartDate={startDate}
+              currentEndDate={endDate}
+            />
+          </div>
+        )}
+      </div>
 
       <TabsContent value="waterfall" className="mt-6">
         {!contracts || contracts.length === 0 ? (
@@ -62,6 +94,8 @@ export function OrganizationTabs({
             organizationId={organizationId}
             canPostToAccounting={true}
             connectedPlatform={connectedPlatform}
+            dateRange={startDate && endDate ? { startDate, endDate } : undefined}
+            viewMode={viewMode}
           />
         )}
       </TabsContent>

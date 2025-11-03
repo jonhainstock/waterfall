@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, Fragment } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Check, X } from 'lucide-react'
 import {
@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { calculateDeferredBalanceForMonth } from '@/lib/calculations/revenue-recognition'
 
 interface Contract {
   id: string
@@ -58,6 +59,11 @@ interface WaterfallTableProps {
   organizationId: string
   canPostToAccounting?: boolean
   connectedPlatform?: string | null
+  dateRange?: {
+    startDate: string
+    endDate: string
+  }
+  viewMode?: 'summary' | 'detail'
 }
 
 export function WaterfallTable({
@@ -66,6 +72,8 @@ export function WaterfallTable({
   organizationId,
   canPostToAccounting = false,
   connectedPlatform = null,
+  dateRange,
+  viewMode = 'summary',
 }: WaterfallTableProps) {
   const router = useRouter()
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
@@ -100,12 +108,25 @@ export function WaterfallTable({
   const platformDisplayName = platform === 'xero' ? 'Xero' : 'QuickBooks'
 
   // Get unique months across all schedules, sorted chronologically
+  // Filter by date range if provided
   const months = useMemo(() => {
-    const uniqueMonths = Array.from(
+    let uniqueMonths = Array.from(
       new Set(schedules.map((s) => s.recognition_month))
     ).sort()
+
+    // Filter months within date range if provided
+    if (dateRange) {
+      const startDate = new Date(dateRange.startDate)
+      const endDate = new Date(dateRange.endDate)
+
+      uniqueMonths = uniqueMonths.filter((month) => {
+        const monthDate = new Date(month)
+        return monthDate >= startDate && monthDate <= endDate
+      })
+    }
+
     return uniqueMonths
-  }, [schedules])
+  }, [schedules, dateRange])
 
   // Determine which months are fully posted
   const monthPostingStatus = useMemo(() => {
@@ -128,6 +149,24 @@ export function WaterfallTable({
     return map
   }, [schedules])
 
+  // Create a map for deferred balance lookup
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, number>()
+    contracts.forEach((contract) => {
+      months.forEach((month) => {
+        const balance = calculateDeferredBalanceForMonth(
+          contract.contract_amount,
+          contract.id,
+          schedules,
+          month
+        )
+        const key = `${contract.id}-${month}`
+        map.set(key, parseFloat(balance))
+      })
+    })
+    return map
+  }, [contracts, schedules, months])
+
   // Calculate monthly totals
   const monthlyTotals = useMemo(() => {
     const totals = new Map<string, number>()
@@ -139,6 +178,66 @@ export function WaterfallTable({
     })
     return totals
   }, [months, schedules])
+
+  // Calculate total deferred balance by month (sum across all contracts)
+  const monthlyDeferredBalances = useMemo(() => {
+    const balances = new Map<string, number>()
+    months.forEach((month) => {
+      const total = contracts.reduce((sum, contract) => {
+        const key = `${contract.id}-${month}`
+        const balance = balanceMap.get(key) || 0
+        return sum + balance
+      }, 0)
+      balances.set(month, total)
+    })
+    return balances
+  }, [months, contracts, balanceMap])
+
+  // Calculate starting balance (before date range) for each contract
+  const startingBalances = useMemo(() => {
+    if (!dateRange) return null
+
+    const balances = new Map<string, number>()
+    const startDate = new Date(dateRange.startDate)
+
+    contracts.forEach((contract) => {
+      // Sum recognition before startDate
+      const recognizedBefore = schedules
+        .filter((s) => {
+          const scheduleDate = new Date(s.recognition_month)
+          return s.contract_id === contract.id && scheduleDate < startDate
+        })
+        .reduce((sum, s) => sum + s.recognition_amount, 0)
+
+      const startingBalance = contract.contract_amount - recognizedBefore
+      balances.set(contract.id, startingBalance)
+    })
+
+    return balances
+  }, [dateRange, contracts, schedules])
+
+  // Calculate ending balance (after date range) for each contract
+  const endingBalances = useMemo(() => {
+    if (!dateRange) return null
+
+    const balances = new Map<string, number>()
+    const endDate = new Date(dateRange.endDate)
+
+    contracts.forEach((contract) => {
+      // Sum recognition through endDate
+      const recognizedThrough = schedules
+        .filter((s) => {
+          const scheduleDate = new Date(s.recognition_month)
+          return s.contract_id === contract.id && scheduleDate <= endDate
+        })
+        .reduce((sum, s) => sum + s.recognition_amount, 0)
+
+      const endingBalance = contract.contract_amount - recognizedThrough
+      balances.set(contract.id, endingBalance)
+    })
+
+    return balances
+  }, [dateRange, contracts, schedules])
 
   // Define columns for TanStack Table
   const columns = useMemo<ColumnDef<Contract>[]>(() => {
@@ -155,6 +254,24 @@ export function WaterfallTable({
         header: 'Customer',
         cell: ({ row }) => (
           <div className="text-gray-700">{row.original.customer_name || '—'}</div>
+        ),
+      },
+      {
+        accessorKey: 'start_date',
+        header: 'Start Date',
+        cell: ({ row }) => (
+          <div className="text-gray-700 whitespace-nowrap">
+            {formatDate(row.original.start_date)}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'end_date',
+        header: 'End Date',
+        cell: ({ row }) => (
+          <div className="text-gray-700 whitespace-nowrap">
+            {formatDate(row.original.end_date)}
+          </div>
         ),
       },
       {
@@ -175,31 +292,102 @@ export function WaterfallTable({
       },
     ]
 
+    // Add starting balance column if date range is active
+    const startBalanceColumn: ColumnDef<Contract>[] = dateRange && startingBalances ? [
+      {
+        id: 'starting-balance',
+        header: () => (
+          <div className="text-right text-gray-700 whitespace-nowrap font-medium">
+            Starting Balance
+          </div>
+        ),
+        cell: ({ row }) => {
+          const balance = startingBalances.get(row.original.id) || 0
+          return (
+            <div className="text-right text-gray-900 bg-blue-50 font-medium">
+              {formatCurrency(balance)}
+            </div>
+          )
+        },
+      },
+    ] : []
+
     // Add dynamic month columns
-    const monthColumns: ColumnDef<Contract>[] = months.map((month) => ({
-      id: month,
-      header: () => {
-        const isPosted = monthPostingStatus.get(month)
-        return (
+    // In SUMMARY mode: Show only revenue columns
+    // In DETAIL mode: Show revenue + balance columns
+    const monthColumns: ColumnDef<Contract>[] = months.flatMap((month) => {
+      const isPosted = monthPostingStatus.get(month)
+
+      const revenueColumn: ColumnDef<Contract> = {
+        id: `${month}-revenue`,
+        header: () => (
           <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
             <span>{formatMonth(month)}</span>
             {isPosted && <Check className="h-4 w-4 text-green-600" />}
           </div>
-        )
-      },
-      cell: ({ row }) => {
-        const key = `${row.original.id}-${month}`
-        const amount = scheduleMap.get(key)
-        return (
-          <div className="text-right text-gray-900">
-            {amount ? formatCurrency(amount) : '—'}
-          </div>
-        )
-      },
-    }))
+        ),
+        cell: ({ row }) => {
+          const key = `${row.original.id}-${month}`
+          const amount = scheduleMap.get(key)
+          return (
+            <div className="text-right text-gray-900">
+              {amount ? formatCurrency(amount) : '—'}
+            </div>
+          )
+        },
+      }
 
-    return [...fixedColumns, ...monthColumns]
-  }, [months, monthPostingStatus, scheduleMap])
+      // Only show balance column in DETAIL mode
+      if (viewMode === 'detail') {
+        const balanceColumn: ColumnDef<Contract> = {
+          id: `${month}-balance`,
+          header: () => (
+            <div className="text-right text-gray-500 whitespace-nowrap text-xs font-normal">
+              Balance
+            </div>
+          ),
+          cell: ({ row }) => {
+            const key = `${row.original.id}-${month}`
+            const balance = balanceMap.get(key)
+            return (
+              <div className="text-right text-gray-600 text-sm bg-gray-50/50">
+                {balance !== undefined ? formatCurrency(balance) : '—'}
+              </div>
+            )
+          },
+          meta: {
+            headerClassName: 'bg-gray-100/50',
+          },
+        }
+        return [revenueColumn, balanceColumn]
+      }
+
+      // In summary mode, only return revenue column
+      return [revenueColumn]
+    })
+
+    // Add ending balance column if date range is active
+    const endBalanceColumn: ColumnDef<Contract>[] = dateRange && endingBalances ? [
+      {
+        id: 'ending-balance',
+        header: () => (
+          <div className="text-right text-gray-700 whitespace-nowrap font-medium">
+            Ending Balance
+          </div>
+        ),
+        cell: ({ row }) => {
+          const balance = endingBalances.get(row.original.id) || 0
+          return (
+            <div className="text-right text-gray-900 bg-blue-50 font-medium">
+              {formatCurrency(balance)}
+            </div>
+          )
+        },
+      },
+    ] : []
+
+    return [...fixedColumns, ...startBalanceColumn, ...monthColumns, ...endBalanceColumn]
+  }, [months, monthPostingStatus, scheduleMap, balanceMap, dateRange, startingBalances, endingBalances, viewMode])
 
   // Initialize TanStack Table
   const table = useReactTable({
@@ -220,6 +408,11 @@ export function WaterfallTable({
   // Format month header
   const formatMonth = (dateString: string) => {
     return format(parseISO(dateString), 'MMM yyyy')
+  }
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    return format(parseISO(dateString), 'MMM d, yyyy')
   }
 
   // Handle opening the post dialog
@@ -335,12 +528,13 @@ export function WaterfallTable({
             {/* Totals row */}
             <TableRow className="bg-gray-100 font-semibold">
               <TableCell
+                key="total-label"
                 className="sticky left-0 z-10 bg-gray-100 whitespace-nowrap px-4 py-4 text-sm text-gray-900"
-                colSpan={2}
+                colSpan={4}
               >
                 TOTAL
               </TableCell>
-              <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
+              <TableCell key="contract-amount-total" className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                 {formatCurrency(
                   contracts.reduce(
                     (sum, c) => sum + c.contract_amount,
@@ -348,30 +542,80 @@ export function WaterfallTable({
                   )
                 )}
               </TableCell>
-              <TableCell className="whitespace-nowrap px-4 py-4"></TableCell>
+              <TableCell key="dates-empty" className="whitespace-nowrap px-4 py-4"></TableCell>
 
-              {/* Monthly totals */}
-              {months.map((month) => (
-                <TableCell
-                  key={month}
-                  className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
-                >
-                  {formatCurrency(monthlyTotals.get(month) || 0)}
-                </TableCell>
-              ))}
+              {/* Starting balance total if date range active */}
+              {dateRange && startingBalances ? (
+                <Fragment key="starting-balance-total">
+                  <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900 bg-blue-50 font-bold">
+                    {formatCurrency(
+                      contracts.reduce((sum, c) => sum + (startingBalances.get(c.id) || 0), 0)
+                    )}
+                  </TableCell>
+                </Fragment>
+              ) : null}
+
+              {/* Monthly revenue totals and deferred balance totals */}
+              {months.flatMap((month) => {
+                const cells = [
+                  /* Revenue total */
+                  <TableCell
+                    key={`${month}-revenue-total`}
+                    className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900"
+                  >
+                    {formatCurrency(monthlyTotals.get(month) || 0)}
+                  </TableCell>,
+                ]
+
+                // Only show balance total in DETAIL mode
+                if (viewMode === 'detail') {
+                  cells.push(
+                    /* Balance total */
+                    <TableCell
+                      key={`${month}-balance-total`}
+                      className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-600 bg-gray-50"
+                    >
+                      {formatCurrency(monthlyDeferredBalances.get(month) || 0)}
+                    </TableCell>
+                  )
+                }
+
+                return cells
+              })}
+
+              {/* Ending balance total if date range active */}
+              {dateRange && endingBalances ? (
+                <Fragment key="ending-balance-total">
+                  <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900 bg-blue-50 font-bold">
+                    {formatCurrency(
+                      contracts.reduce((sum, c) => sum + (endingBalances.get(c.id) || 0), 0)
+                    )}
+                  </TableCell>
+                </Fragment>
+              ) : null}
             </TableRow>
 
             {/* Actions row - Post to Accounting Platform */}
             {(canPostToAccounting || accountingConnected) && (
               <TableRow className="bg-gray-50">
                 <TableCell
+                  key="platform-label"
                   className="sticky left-0 z-10 bg-gray-50 whitespace-nowrap px-4 py-3 text-xs text-gray-500"
-                  colSpan={4}
+                  colSpan={6}
                 >
                   {platformDisplayName}
                 </TableCell>
 
+                {/* Empty cell for starting balance column if date range active */}
+                {dateRange && startingBalances ? (
+                  <Fragment key="starting-balance-action">
+                    <TableCell className="whitespace-nowrap px-4 py-3 bg-gray-50"></TableCell>
+                  </Fragment>
+                ) : null}
+
                 {/* Post buttons for each month */}
+                {/* In detail mode: spans 2 columns (revenue + balance) */}
+                {/* In summary mode: spans 1 column (revenue only) */}
                 {months.map((month) => {
                   const isPosted = monthPostingStatus.get(month)
                   const monthTotal = monthlyTotals.get(month) || 0
@@ -379,6 +623,7 @@ export function WaterfallTable({
                   return (
                     <TableCell
                       key={month}
+                      colSpan={viewMode === 'detail' ? 2 : 1}
                       className="whitespace-nowrap px-4 py-3 text-right"
                     >
                       {isPosted ? (
@@ -413,6 +658,13 @@ export function WaterfallTable({
                     </TableCell>
                   )
                 })}
+
+                {/* Empty cell for ending balance column if date range active */}
+                {dateRange && endingBalances ? (
+                  <Fragment key="ending-balance-action">
+                    <TableCell className="whitespace-nowrap px-4 py-3 bg-gray-50"></TableCell>
+                  </Fragment>
+                ) : null}
               </TableRow>
             )}
           </TableBody>
