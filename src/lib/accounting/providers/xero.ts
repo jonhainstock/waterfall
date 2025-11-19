@@ -264,6 +264,41 @@ export class XeroProvider implements AccountingProvider {
   }
 
   /**
+   * Get account balance from Xero Balance Sheet report
+   *
+   * Stub implementation - not yet implemented
+   */
+  async getBalanceSheetAccountBalance(
+    tokens: AccountingTokens,
+    accountId: string,
+    asOfDate: string
+  ): Promise<{ success: boolean; balance?: number; error?: string }> {
+    // TODO: Real implementation
+    return {
+      success: false,
+      error: 'Xero balance fetching not yet implemented',
+    }
+  }
+
+  /**
+   * Get account balance from Xero Profit & Loss report
+   *
+   * Stub implementation - not yet implemented
+   */
+  async getProfitAndLossAccountBalance(
+    tokens: AccountingTokens,
+    accountId: string,
+    periodStart: string,
+    periodEnd: string
+  ): Promise<{ success: boolean; balance?: number; error?: string }> {
+    // TODO: Real implementation
+    return {
+      success: false,
+      error: 'Xero balance fetching not yet implemented',
+    }
+  }
+
+  /**
    * Disconnect from Xero
    */
   async disconnect(tokens: AccountingTokens): Promise<void> {

@@ -12,7 +12,7 @@ import {
   calculateMonthlyRecognition,
   generateRecognitionSchedule,
 } from '@/lib/calculations/revenue-recognition'
-import { addMonths, differenceInMonths, parse, startOfMonth } from 'date-fns'
+import { addMonths, differenceInMonths, parse, startOfMonth, format } from 'date-fns'
 import type { Database } from '@/types/supabase'
 
 type ContractInsert = Database['public']['Tables']['contracts']['Insert']
@@ -423,7 +423,7 @@ export async function postMonthToAccounting(
 
   const journalEntryParams = {
     date: lastDayOfMonth.toISOString().split('T')[0],
-    memo: `Waterfall - Revenue Recognition for ${month}`,
+    memo: `Waterfall - Revenue Recognition for ${format(new Date(month), 'MMMM yyyy')} (Aggregated)`,
     lines: [
       {
         accountId: accountMapping.deferredRevenueAccountId,

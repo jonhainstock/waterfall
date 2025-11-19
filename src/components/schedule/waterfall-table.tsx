@@ -610,6 +610,7 @@ export function WaterfallTable({
         onClose={() => setViewingPostActivity(null)}
         activity={viewingPostActivity}
         platformName={platformDisplayName}
+        organizationId={organizationId}
       />
 
       {/* Edit Contract Sheet */}

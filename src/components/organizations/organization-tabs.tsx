@@ -12,6 +12,8 @@ import { WaterfallTable } from '@/components/schedule/waterfall-table'
 import { ActivityHistory } from '@/components/activity/activity-history'
 import { ImportButton } from '@/components/contracts/import-button'
 import { ExportCSVButton } from '@/components/schedule/export-csv-button'
+import { TieOutPanel } from '@/components/reconciliation/tie-out-panel'
+import { verifyTieOut } from '@/app/(dashboard)/[organizationId]/reconciliation-actions'
 import { FileText } from 'lucide-react'
 
 interface OrganizationTabsProps {
@@ -40,6 +42,7 @@ export function OrganizationTabs({
       <div className="flex items-center justify-between gap-4 mb-6">
         <TabsList>
           <TabsTrigger value="waterfall">Waterfall Schedule</TabsTrigger>
+          <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           <TabsTrigger value="history">Activity History</TabsTrigger>
         </TabsList>
 
@@ -76,6 +79,15 @@ export function OrganizationTabs({
             connectedPlatform={connectedPlatform}
           />
         )}
+      </TabsContent>
+
+      <TabsContent value="reconciliation" className="mt-6">
+        <TieOutPanel
+          organizationId={organizationId}
+          onRefresh={async () => {
+            return await verifyTieOut(organizationId)
+          }}
+        />
       </TabsContent>
 
       <TabsContent value="history" className="mt-6">

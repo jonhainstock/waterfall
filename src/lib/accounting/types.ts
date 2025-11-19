@@ -169,6 +169,36 @@ export interface AccountingProvider {
   ): Promise<JournalEntryResult>
 
   /**
+   * Get account balance from Balance Sheet report
+   *
+   * @param tokens OAuth tokens
+   * @param accountId Account ID to get balance for
+   * @param asOfDate Date to get balance as of (YYYY-MM-DD)
+   * @returns Account balance as of the specified date
+   */
+  getBalanceSheetAccountBalance(
+    tokens: AccountingTokens,
+    accountId: string,
+    asOfDate: string
+  ): Promise<{ success: boolean; balance?: number; error?: string }>
+
+  /**
+   * Get account balance from Profit & Loss report
+   *
+   * @param tokens OAuth tokens
+   * @param accountId Account ID to get balance for
+   * @param periodStart Start date of period (YYYY-MM-DD)
+   * @param periodEnd End date of period (YYYY-MM-DD)
+   * @returns Account balance for the period (YTD through periodEnd)
+   */
+  getProfitAndLossAccountBalance(
+    tokens: AccountingTokens,
+    accountId: string,
+    periodStart: string,
+    periodEnd: string
+  ): Promise<{ success: boolean; balance?: number; error?: string }>
+
+  /**
    * Disconnect from accounting platform
    * (optional - some platforms don't support programmatic revocation)
    *

@@ -6,8 +6,9 @@
 
 'use client'
 
+import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CheckCircle2, X } from 'lucide-react'
+import { CheckCircle2, X, RefreshCw } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { TieOutPanel } from '@/components/reconciliation/tie-out-panel'
+import { verifyTieOut } from '@/app/(dashboard)/[organizationId]/reconciliation-actions'
+import type { TieOutResult } from '@/app/(dashboard)/[organizationId]/reconciliation-actions'
 
 interface PostActivityData {
   month: string
@@ -29,6 +33,7 @@ interface PostActivityDialogProps {
   onClose: () => void
   activity: PostActivityData | null
   platformName: string
+  organizationId: string
 }
 
 export function PostActivityDialog({
@@ -36,7 +41,29 @@ export function PostActivityDialog({
   onClose,
   activity,
   platformName,
+  organizationId,
 }: PostActivityDialogProps) {
+  const [tieOutResult, setTieOutResult] = useState<TieOutResult | null>(null)
+  const [isLoadingTieOut, setIsLoadingTieOut] = useState(false)
+  const [showTieOut, setShowTieOut] = useState(false)
+
+  // Run tie-out verification when dialog opens after posting
+  useEffect(() => {
+    if (isOpen && activity && activity.posted_at) {
+      setIsLoadingTieOut(true)
+      verifyTieOut(organizationId)
+        .then((result) => {
+          setTieOutResult(result)
+        })
+        .catch((error) => {
+          console.error('Failed to verify tie-out:', error)
+        })
+        .finally(() => {
+          setIsLoadingTieOut(false)
+        })
+    }
+  }, [isOpen, activity, organizationId])
+
   if (!activity) return null
 
   const formatCurrency = (amount: number) => {
@@ -119,6 +146,49 @@ export function PostActivityDialog({
               <p className="mt-1 text-sm text-gray-900">
                 {formatDateTime(activity.posted_at)}
               </p>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {tieOutResult && (
+            <div className="rounded-md border p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium">Tie-Out Verification</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTieOut(!showTieOut)}
+                >
+                  {showTieOut ? 'Hide' : 'Show'} Details
+                </Button>
+              </div>
+              {tieOutResult.overallMatches ? (
+                <p className="text-sm text-green-600">
+                  ✓ All balances match
+                </p>
+              ) : (
+                <p className="text-sm text-destructive">
+                  ⚠ Discrepancies found - balances do not match
+                </p>
+              )}
+              {showTieOut && (
+                <div className="mt-4">
+                  <TieOutPanel
+                    organizationId={organizationId}
+                    initialResult={tieOutResult}
+                    onRefresh={async () => {
+                      return await verifyTieOut(organizationId)
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {isLoadingTieOut && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Verifying tie-out...
             </div>
           )}
         </div>
